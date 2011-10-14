@@ -3,7 +3,11 @@ require 'eventmachine'
 module Chairman
   module Connection
     def debug(msg)
-      puts "DEBUG: #{msg}" if ENV['DEBUG']
+      @client.debug(msg)
+    end
+
+    def log(msg)
+      @client.log(msg)
     end
 
     def initialize(client,options)
@@ -16,6 +20,7 @@ module Chairman
     end
 
     def post_init
+        log "new connection"
         if @ssl
           debug 'starting TLS'
           start_tls :private_key_file => @client.key_path, :cert_chain_file => @client.cert_path, :verify_peer => true
@@ -23,14 +28,18 @@ module Chairman
           debug 'proxying to peer'
           @peer.enable_proxy self
         else
-          debug "connecting to #{@host}:#{@port} - ssl"
+          log "connecting to ssl://#{@host}:#{@port}"
           EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => true
         end
     end
 
-    def ssl_verify_peer(cert)
-      @cert   ||= OpenSSL::X509::Certificate.new(cert)
-      debug "about to verify #{@cert.subject}"
+    def get_cert(pem)
+      cert = OpenSSL::X509::Certificate.new(pem)
+      log "received remote cert  #{@client.digest cert} #{cert.subject}"
+      cert 
+    end
+    def ssl_verify_peer(pem)
+      @cert   ||= get_cert(pem)
       @verify ||= @cert.verify @client.broker.public_key
     end
 
@@ -42,10 +51,10 @@ module Chairman
     def unbind
       @unbound = true
       if @peer
-        debug "connection closed remotely"
+        log "connection closed remotely"
         @peer.close_connection_after_writing
       else
-        debug "connection closed locally"
+        log "connection closed locally"
       end
     end
 
@@ -54,7 +63,7 @@ module Chairman
         debug "enable proxy"
         @peer.enable_proxy self
       elsif not @unbound
-        debug "connecting to #{@host}:#{@port} - no ssl"
+        log "connecting to tcp://#{@host}:#{@port}"
         EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => false
       else
         debug "handshake complete but socket already unbound"
@@ -69,7 +78,6 @@ module Chairman
     end
 
     def receive_data data
-      debug "data -- #{data}"
       if @target
         @target.send_data data
       else
@@ -88,8 +96,8 @@ module Chairman
 
       EventMachine::run do
         client.save_keys
-        client.update("0.0.0.0", from)
-        puts "Serving port #{to} on #{from}"
+        client.update "0.0.0.0", from
+        client.log "Serving port #{to} on #{from}"
         EventMachine::start_server "0.0.0.0", from, Chairman::Connection, client, :host => "127.0.0.1", :port => to, :ssl => true
       end
     end
@@ -102,8 +110,7 @@ module Chairman
       EventMachine::run do
         client.save_keys
         client.providers.each do |provider|
-          puts "Making socket '#{provider["binding"]}'."
-          puts provider.inspect
+          client.log "Making socket '#{provider["binding"]}'."
           if provider["ip"]
             EventMachine::start_unix_domain_server provider["binding"], Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i, :ssl => false
           end
