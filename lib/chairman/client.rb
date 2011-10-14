@@ -40,23 +40,6 @@ module Chairman
       RestClient.put("#{@url}providers/#{name}", { :binding => binding }, :content_type => :json, :accept => :json);
     end
 
-    def cert
-      @cert ||= get_cert
-    end
-
-    def get_cert
-      OpenSSL::X509::Certificate.new RestClient.post("#{@url}cert", :csr => generate_csr)
-    end
-
-    def key
-      @key ||= generate_key
-    end
-
-    def generate_key
-      puts "Generating RSA key...."
-      OpenSSL::PKey::RSA.new(2048)
-    end
-
     def generate_csr
       subject = OpenSSL::X509::Name.parse "/DC=org/DC=chairman/CN=#{user[:name]}"
       digest = OpenSSL::Digest::SHA1.new
@@ -68,8 +51,38 @@ module Chairman
       req
     end
 
-    def broker_cert
-      @broker_cert ||= OpenSSL::X509::Certificate.new RestClient.get("#{@url}cert")
+    def cleanup
+      providers.each do |provider|
+        puts "Deleting socket '#{provider["name"]}'."
+        File.delete provider["name"] if File.exists? provider["name"]
+      end
+    end
+
+    def handle_file name, action, &blk
+      case [ action, File.exists?(name) ]
+        when [ :write, false ]
+          File.umask "0077"
+          File.open(name, "w") do |f|
+            data = blk.call
+            f.write data
+          end
+          [ name, data ]
+        when [ :delete, true ]
+          File.delete name
+          [name, nil]
+      end
+    end
+
+    def broker_cert(action = :write)
+      handle_file ".broker.cert", action { OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert")) }
+    end
+
+    def cert(action = :write)
+      handle_file '.chairman.cert', action { OpenSSL::X509::Certificate.new RestClient.post("#{@url}cert", :csr => generate_csr) }
+    end
+
+    def key(action = :write)
+      handle_file ".chairman.key", action { OpenSSL::PKey::RSA.new(2048) }
     end
   end
 end

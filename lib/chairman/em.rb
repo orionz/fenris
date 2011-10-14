@@ -15,6 +15,7 @@ module Chairman
 
     def post_init
       if (@ssl)
+        ## TODO 2
         start_tls :private_key_file => '/tmp/client.key', :cert_chain_file => '/tmp/client.crt', :verify_peer => true
       else
         @client.enable_proxy self
@@ -22,6 +23,7 @@ module Chairman
     end
 
     def ssl_verify_peer(cert)
+      ## TODO 1
       authority_key = OpenSSL::PKey::RSA.new File.read("/tmp/authority.pub")
       @verified ||= OpenSSL::X509::Certificate.new(cert).verify(authority_key)
     end
@@ -103,10 +105,7 @@ module Chairman
       Dir.chdir(dir)
 
       at_exit do
-        client.providers.each do |provider|
-          puts "Deleting socket '#{provider["name"]}'."
-          File.delete provider["name"] if File.exists? provider["name"]
-        end
+        client.cleanup
       end
 
       EventMachine::run do
