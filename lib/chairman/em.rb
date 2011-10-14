@@ -27,9 +27,12 @@ module Chairman
         elsif @peer
           debug 'proxying to peer'
           @peer.enable_proxy self
-        else
+        elsif @host && @port
           log "connecting to ssl://#{@host}:#{@port}"
           EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => true
+        else
+          log "no remote service to connect to - closing connection"
+          close_connection_after_writing
         end
     end
 
@@ -111,9 +114,9 @@ module Chairman
         client.save_keys
         client.providers.each do |provider|
           client.log "Making socket '#{provider["binding"]}'."
-          if provider["ip"]
+#          if provider["ip"]
             EventMachine::start_unix_domain_server provider["binding"], Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i, :ssl => false
-          end
+#          end
         end
       end
     end
