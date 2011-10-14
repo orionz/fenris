@@ -59,8 +59,12 @@ module Chairman
         puts "Deleting socket '#{provider["binding"]}'."
         File.delete provider["binding"] if File.exists? provider["binding"]
       end
-      File.delete cert_path if File.exists? cert_path
-      File.delete key_path  if File.exists? key_path
+      [ cert_path, key_path ].each do |f|
+        if File.exists?
+          puts "Deleting file #{f}"
+          File.delete f
+        end
+      end
     end
 
     def save_keys

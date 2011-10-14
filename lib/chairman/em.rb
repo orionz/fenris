@@ -29,10 +29,9 @@ module Chairman
     end
 
     def ssl_verify_peer(cert)
-      debug "about to verified: #{@verified}"
-      @verified ||= OpenSSL::X509::Certificate.new(cert).verify @client.broker.public_key
-      debug "verified: #{@verified}"
-      @verified
+      @cert   ||= OpenSSL::X509::Certificate.new(cert)
+      debug "about to verify #{@cert.subject}"
+      @verify ||= @cert.verify @client.broker.public_key
     end
 
     def proxy_target_unbound
