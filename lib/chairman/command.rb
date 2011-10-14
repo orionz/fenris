@@ -8,7 +8,7 @@ module Chairman
                "       chairman add USER\n",
                "       chairman remove USER\n",
                "       chairman serve PORT\n",
-               "       chairman connect [DIR]" ]
+               "       chairman connect" ]
       case command
         when "cert"
           puts client.cert.to_text
@@ -34,8 +34,7 @@ module Chairman
           to = arg.to_i
           Chairman::Base.serve(client, from, to) if to > 0
         when "connect"
-          dir = arg || Dir.pwd
-          Chairman::Base.connect(client, dir)
+          Chairman::Base.connect(client)
         else
           puts command.inspect
           puts help

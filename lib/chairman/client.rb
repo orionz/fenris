@@ -4,6 +4,9 @@ require 'openssl'
 
 module Chairman
   class Client
+    def debug(message)
+      puts "DEBUG: #{message}" if ENV['DEBUG']
+    end
     def initialize(url)
       @url = url
     end
@@ -53,36 +56,38 @@ module Chairman
 
     def cleanup
       providers.each do |provider|
-        puts "Deleting socket '#{provider["name"]}'."
-        File.delete provider["name"] if File.exists? provider["name"]
+        puts "Deleting socket '#{provider["binding"]}'."
+        File.delete provider["binding"] if File.exists? provider["binding"]
       end
+      File.delete cert_path if File.exists? cert_path
+      File.delete key_path  if File.exists? key_path
     end
 
-    def handle_file name, action, &blk
-      case [ action, File.exists?(name) ]
-        when [ :write, false ]
-          File.umask "0077"
-          File.open(name, "w") do |f|
-            data = blk.call
-            f.write data
-          end
-          [ name, data ]
-        when [ :delete, true ]
-          File.delete name
-          [name, nil]
-      end
+    def save_keys
+      File.open(cert_path,"w") { |f| f.write cert.to_pem } unless File.exists? cert_path
+      File.open(key_path,"w") { |f| f.write key.to_pem } unless File.exists? key_path
     end
 
-    def broker_cert(action = :write)
-      handle_file ".broker.cert", action { OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert")) }
+    def broker
+      @broker ||= OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert"))
     end
 
-    def cert(action = :write)
-      handle_file '.chairman.cert', action { OpenSSL::X509::Certificate.new RestClient.post("#{@url}cert", :csr => generate_csr) }
+    def cert
+      @cert ||= OpenSSL::X509::Certificate.new(File.read(cert_path)) rescue nil
+      @cert ||= OpenSSL::X509::Certificate.new(RestClient.post("#{@url}cert", :csr => generate_csr))
     end
 
-    def key(action = :write)
-      handle_file ".chairman.key", action { OpenSSL::PKey::RSA.new(2048) }
+    def key
+      @key ||= OpenSSL::PKey::RSA.new(File.read(key_path)) rescue nil
+      @key ||= OpenSSL::PKey::RSA.new(2048)
+    end
+
+    def cert_path
+      ".chairman.cert"
+    end
+
+    def key_path
+      ".chairman.key"
     end
   end
 end

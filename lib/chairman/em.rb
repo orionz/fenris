@@ -7,7 +7,6 @@ module Chairman
     end
 
     def initialize(client,options)
-      debug "options #{options.inspect}"
       @client = client
       @ssl  = !!options[:ssl]
       @peer = options[:peer]
@@ -18,13 +17,8 @@ module Chairman
 
     def post_init
         if @ssl
-          if @peer
-            debug 'starting client TLS'
-            start_tls :private_key_file => '/tmp/client.key', :cert_chain_file => '/tmp/client.crt', :verify_peer => true
-          else
-            debug 'starting server TLS'
-            start_tls :private_key_file => '/tmp/server.key', :cert_chain_file => '/tmp/server.crt', :verify_peer => true
-          end
+          debug 'starting TLS'
+          start_tls :private_key_file => @client.key_path, :cert_chain_file => @client.cert_path, :verify_peer => true
         elsif @peer
           debug 'proxying to peer'
           @peer.enable_proxy self
@@ -36,8 +30,7 @@ module Chairman
 
     def ssl_verify_peer(cert)
       debug "about to verified: #{@verified}"
-      authority_key = OpenSSL::PKey::RSA.new File.read("/tmp/authority.pub")
-      @verified ||= OpenSSL::X509::Certificate.new(cert).verify(authority_key)
+      @verified ||= OpenSSL::X509::Certificate.new(cert).verify @client.broker.public_key
       debug "verified: #{@verified}"
       @verified
     end
@@ -70,7 +63,6 @@ module Chairman
     end
 
     def enable_proxy(dest)
-      debug "asked to enable proxy"
       @q.each { |d| dest.send_data d }
       @q = []
       @target = dest
@@ -96,20 +88,20 @@ module Chairman
       end
 
       EventMachine::run do
+        client.save_keys
         client.update("0.0.0.0", from)
         puts "Serving port #{to} on #{from}"
         EventMachine::start_server "0.0.0.0", from, Chairman::Connection, client, :host => "127.0.0.1", :port => to, :ssl => true
       end
     end
 
-    def connect(client, dir)
-      Dir.chdir(dir)
-
+    def connect(client)
       at_exit do
         client.cleanup
       end
 
       EventMachine::run do
+        client.save_keys
         client.providers.each do |provider|
           puts "Making socket '#{provider["binding"]}'."
           puts provider.inspect
