@@ -1,71 +1,76 @@
 require 'eventmachine'
 
 module Chairman
-
-  module Uber
-    def initialize(client, ssl)
-      @client, @ssl = client, ssl
+  module Connection
+    def debug(msg)
+      puts "DEBUG: #{msg}" if ENV['DEBUG']
     end
-  end
 
-  module ProxyConnection
-    def initialize(client, ssl)
-      @client, @ssl = client, ssl
+    def initialize(client,options)
+      debug "options #{options.inspect}"
+      @client = client
+      @ssl  = !!options[:ssl]
+      @peer = options[:peer]
+      @host = options[:host]
+      @port = options[:port]
+      @q    = []
     end
 
     def post_init
-      if (@ssl)
-        ## TODO 2
-        start_tls :private_key_file => '/tmp/client.key', :cert_chain_file => '/tmp/client.crt', :verify_peer => true
-      else
-        @client.enable_proxy self
-      end
+        if @ssl
+          if @peer
+            debug 'starting client TLS'
+            start_tls :private_key_file => '/tmp/client.key', :cert_chain_file => '/tmp/client.crt', :verify_peer => true
+          else
+            debug 'starting server TLS'
+            start_tls :private_key_file => '/tmp/server.key', :cert_chain_file => '/tmp/server.crt', :verify_peer => true
+          end
+        elsif @peer
+          debug 'proxying to peer'
+          @peer.enable_proxy self
+        else
+          debug "connecting to #{@host}:#{@port} - ssl"
+          EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => true
+        end
     end
 
     def ssl_verify_peer(cert)
-      ## TODO 1
+      debug "about to verified: #{@verified}"
       authority_key = OpenSSL::PKey::RSA.new File.read("/tmp/authority.pub")
       @verified ||= OpenSSL::X509::Certificate.new(cert).verify(authority_key)
-    end
-
-    def ssl_handshake_completed
-      @client.enable_proxy self
+      debug "verified: #{@verified}"
+      @verified
     end
 
     def proxy_target_unbound
+      debug "proxy target is unbound"
       close_connection
     end
 
     def unbind
-      @client.close_connection_after_writing
-    end
-  end
-
-  module ProviderSocket
-    def initialize(host, port, ssl)
-      @host, @port = host, port
-      @ssl = ssl
-      @q = []
-    end
-
-    def post_init
-      if (@ssl)
-        start_tls :private_key_file => '/tmp/server.key', :cert_chain_file => '/tmp/server.crt', :verify_peer => true
+      @unbound = true
+      if @peer
+        debug "connection closed remotely"
+        @peer.close_connection_after_writing
       else
-        EventMachine::connect @host, @port, Chairman::ProxyConnection, self, true
+        debug "connection closed locally"
       end
     end
 
-    def ssl_verify_peer(cert)
-      authority_key = OpenSSL::PKey::RSA.new File.read("/tmp/authority.pub")
-      @verified ||= OpenSSL::X509::Certificate.new(cert).verify(authority_key)
-    end
-
     def ssl_handshake_completed
-      EventMachine::connect @host, @port, Chairman::ProxyConnection, self, false unless @unbound
+      if (@peer)
+        debug "enable proxy"
+        @peer.enable_proxy self
+      elsif not @unbound
+        debug "connecting to #{@host}:#{@port} - no ssl"
+        EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => false
+      else
+        debug "handshake complete but socket already unbound"
+      end
     end
 
     def enable_proxy(dest)
+      debug "asked to enable proxy"
       @q.each { |d| dest.send_data d }
       @q = []
       @target = dest
@@ -73,20 +78,12 @@ module Chairman
     end
 
     def receive_data data
+      debug "data -- #{data}"
       if @target
         @target.send_data data
       else
         @q << data
       end
-    end
-
-    def proxy_target_unbound
-      close_connection
-    end
-
-    def unbind
-      @unbound = true
-      @client.close_connection_after_writing if @client
     end
   end
 
@@ -94,10 +91,14 @@ module Chairman
     extend self
 
     def serve(client, from, to)
+      at_exit do
+        client.cleanup
+      end
+
       EventMachine::run do
         client.update("0.0.0.0", from)
         puts "Serving port #{to} on #{from}"
-        EventMachine::start_server "0.0.0.0", from, Chairman::ProviderSocket, "127.0.0.1", to, true
+        EventMachine::start_server "0.0.0.0", from, Chairman::Connection, client, :host => "127.0.0.1", :port => to, :ssl => true
       end
     end
 
@@ -113,7 +114,7 @@ module Chairman
           puts "Making socket '#{provider["binding"]}'."
           puts provider.inspect
           if provider["ip"]
-            EventMachine::start_unix_domain_server provider["binding"], Chairman::ProviderSocket, provider["ip"], provider["port"].to_i, false
+            EventMachine::start_unix_domain_server provider["binding"], Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i, :ssl => false
           end
         end
       end
