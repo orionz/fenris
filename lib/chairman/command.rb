@@ -34,7 +34,7 @@ module Chairman
           to = arg.to_i
           Chairman::Base.serve(client, from, to) if to > 0
         when "connect"
-          Chairman::Base.connect(client)
+          Chairman::Base.connect(client, arg, name)
         else
           puts command.inspect
           puts help

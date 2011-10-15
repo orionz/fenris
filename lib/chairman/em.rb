@@ -31,7 +31,7 @@ module Chairman
           log "connecting to ssl://#{@host}:#{@port}"
           EventMachine::connect @host, @port, Chairman::Connection, @client, :peer => self, :ssl => true
         else
-          log "no remote service to connect to - closing connection"
+          log "no remote service to connect to - closing connection #{@host} #{@port}"
           close_connection_after_writing
         end
     end
@@ -39,7 +39,7 @@ module Chairman
     def get_cert(pem)
       cert = OpenSSL::X509::Certificate.new(pem)
       log "received remote cert  #{@client.digest cert} #{cert.subject}"
-      cert 
+      cert
     end
     def ssl_verify_peer(pem)
       @cert   ||= get_cert(pem)
@@ -93,9 +93,7 @@ module Chairman
     extend self
 
     def serve(client, from, to)
-      at_exit do
-        client.cleanup
-      end
+      at_exit { client.cleanup }
 
       EventMachine::run do
         client.save_keys
@@ -105,19 +103,49 @@ module Chairman
       end
     end
 
-    def connect(client)
-      at_exit do
-        client.cleanup
+    def tcp_server(host, port, client, provider)
+      client.log "Listening on '#{host}:#{port}' for #{provider["name"]}."
+      client.log "- #{provider.inspect}"
+      EventMachine::start_server host, port, Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i
+    end
+
+    def unix_socket_server(path, client, provider)
+      client.log "Listening on unix socket '#{path}' for #{provider["name"]}."
+      EventMachine::start_unix_domain_server path, Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i
+    end
+
+    def stdin_server(client, provider)
+      EventMachine::attach $stdin, Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i
+    end
+
+    def run(binding, client, provider)
+      puts "run #{binding.inspect} #{client} #{provider["name"]}"
+      ## This could be better
+      if binding =~ /^:?(\d)+$/
+        tcp_server "0.0.0.0", $1.to_i, client, provider
+      elsif binding =~ /^(.+):(\d+)/
+        tcp_server $1, $2.to_i, client, provider
+      elsif binding == "--"
+        stdin_server client, provider
+      else
+        unix_socket_server binding, client, provider
       end
+    end
+
+    def connect(client, provider = nil, binding = nil)
+      at_exit { client.cleanup }
 
       EventMachine::run do
         client.save_keys
-        client.providers.each do |provider|
-          client.log "Making socket '#{provider["binding"]}'."
-#          if provider["ip"]
-            EventMachine::start_unix_domain_server provider["binding"], Chairman::Connection, client, :host => provider["ip"], :port => provider["port"].to_i, :ssl => false
-#          end
-        end
+
+        abort "No providers" if client.providers.empty?
+
+        providers = client.providers.reject { |p| provider && p["name"] != provider }
+
+        abort "No provider named #{provider}" if providers.empty?
+        abort "Can only pass a binding for a single provider" if binding && providers.length != 1
+
+        providers.each { |p| run (binding || p["binding"]), client, p }
       end
     end
   end
