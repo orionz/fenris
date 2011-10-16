@@ -80,6 +80,7 @@ module Chairman
 
     def consumer_connect(client, consumer, provider)
       EventMachine::start_server *mkbinding(consumer), Chairman::Connection do |consumer|
+#      EventMachine::attach $stdin, Chairman::Connection do |consumer|
         client.log "New connection: opening connection to the server"
         EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
