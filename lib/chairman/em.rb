@@ -25,6 +25,7 @@ module Chairman
     end
 
     def unbind
+      EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
       close_connection
     end
