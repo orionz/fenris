@@ -46,24 +46,43 @@ module Chairman
   module Base
     extend self
 
-    def serve(client, from, to)
+    def producer_server(client, from, to)
+      EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
+        client.log "New connection - begin ssl handshake"
+        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+          client.log "SSL complete - open local connection"
+          EventMachine::connect *mkbinding(to), Chairman::Connection do |producer|
+            client.log "start proxying"
+            producer.proxy consumer; consumer.proxy producer
+          end
+        end
+      end
+    end
+
+    def producer_server_stdio(client, from)
+      producer = EventMachine::attach $stdin, Chairman::Connection
+      EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
+        client.log "New connection - begin ssl handshake"
+        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+          client.log "SSL complete -- start proxying"
+          producer.proxy consumer; consumer.proxy producer
+        end
+      end
+    end
+
+    def serve(client, listen_port, to)
       at_exit { client.cleanup }
 
       EventMachine::run do
         client.save_keys
-        client.update "0.0.0.0", from
+        client.update "0.0.0.0", listen_port
+        from = "0.0.0.0:#{listen_port}"
         client.log "Serving port #{to} on #{from}"
-        puts "DEBUG: #{mkbinding("0.0.0.0:#{from}")}"
-        EventMachine::start_server *mkbinding("0.0.0.0:#{from}"), Chairman::Connection do |consumer|
-          client.log "New connection - begin ssl handshake"
-          consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
-            client.log "SSL complete - open local connection"
-            EventMachine::connect *mkbinding("127.0.0.1:#{to}"), Chairman::Connection do |producer|
-              client.log "start proxying"
-              producer.proxy consumer
-              consumer.proxy producer
-            end
-          end
+        puts "DEBUG: #{mkbinding(from)}"
+        if (to == "--")
+          producer_server_stdio(client, from)
+        else
+          producer_server(client, from, to)
         end
       end
     end
@@ -80,34 +99,50 @@ module Chairman
 
     def consumer_connect(client, consumer, provider)
       EventMachine::start_server *mkbinding(consumer), Chairman::Connection do |consumer|
-#      EventMachine::attach $stdin, Chairman::Connection do |consumer|
         client.log "New connection: opening connection to the server"
         EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
           provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
             client.log "SSL complete - start proxying"
-            provider.proxy consumer
-            consumer.proxy provider
+            provider.proxy consumer; consumer.proxy provider
           end
         end
       end
     end
 
-    def connect(client, provider = nil, binding = nil)
+    def consumer_connect_stdio(client, consumer, provider)
+      EventMachine::attach $stdin, Chairman::Connection do |consumer|
+        client.log "New connection: opening connection to the server"
+        EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
+          client.log "Connection to the server made, starting ssl"
+          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+            client.log "SSL complete - start proxying"
+            provider.proxy consumer; consumer.proxy provider
+          end
+        end
+      end
+    end
+
+    def connect(client, overide_provider = nil, override_binding = nil)
       at_exit { client.cleanup }
 
       client.save_keys
 
       abort "No providers" if client.providers.empty?
 
-      providers = client.providers.reject { |p| provider && p["name"] != provider }
+      providers = client.providers.reject { |p| overide_provider && p["name"] != overide_provider }
 
-      abort "No provider named #{provider}" if providers.empty?
-      abort "Can only pass a binding for a single provider" if binding && providers.length != 1
+      abort "No provider named #{overide_provider}" if providers.empty?
+      abort "Can only pass a binding for a single provider" if override_binding && providers.length != 1
 
       EventMachine::run do
         providers.each do |p|
-          consumer_connect(client, (binding || p["binding"]), "#{p["ip"]}:#{p["port"]}")
+          binding = override_binding || p["binding"]
+          if binding == "--"
+            consumer_connect_stdio(client, binding, "#{p["ip"]}:#{p["port"]}")
+          else
+            consumer_connect(client, binding, "#{p["ip"]}:#{p["port"]}")
+          end
         end
       end
     end

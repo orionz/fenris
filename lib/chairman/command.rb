@@ -31,8 +31,8 @@ module Chairman
           end
         when "serve"
           from = 10001
-          to = arg.to_i
-          Chairman::Base.serve(client, from, to) if to > 0
+          to = arg
+          Chairman::Base.serve(client, from, to)
         when "connect"
           Chairman::Base.connect(client, arg, name)
         else
