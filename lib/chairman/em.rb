@@ -13,18 +13,23 @@ module Chairman
 
     def begin_ssl(opts, &blk)
       @post_ssl = blk
-      @broker = opts[:broker]
       start_tls :private_key_file => opts[:key_file], :cert_chain_file => opts[:cert_file], :verify_peer => true
     end
 
     def post_init
     end
 
+    def validate_peer(&blk)
+      @validator = blk;
+    end
+
     def ssl_verify_peer(pem)
-      @verify ||= OpenSSL::X509::Certificate.new(pem).verify @broker.public_key
+      @verify ||= @validator.call(pem)
     end
 
     def unbind
+      @unbound = true
+      puts "DEBUG: unbind #{@signature}"
       EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
       close_connection
@@ -35,6 +40,7 @@ module Chairman
     end
 
     def proxy(peer)
+      peer.close if @unbound
       @peer.each { |d| peer.push d}
       @peer = peer
     end
@@ -50,7 +56,8 @@ module Chairman
     def producer_server(client, from, to)
       EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
-        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+        consumer.validate_peer { |pem| client.validate_peer pem  }
+        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
           EventMachine::connect *mkbinding(to), Chairman::Connection do |producer|
             client.log "start proxying"
@@ -64,7 +71,8 @@ module Chairman
       producer = EventMachine::attach $stdin, Chairman::Connection
       EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
-        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+        consumer.validate_peer { |pem| client.validate_peer(pem, producer) }
+        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete -- start proxying"
           producer.proxy consumer; consumer.proxy producer
         end
@@ -98,12 +106,14 @@ module Chairman
       end
     end
 
+    ## really want to unify all these :(
     def consumer_connect(client, consumer, provider)
       EventMachine::start_server *mkbinding(consumer), Chairman::Connection do |consumer|
         client.log "New connection: opening connection to the server"
         EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
-          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+          provider.validate_peer { |pem| client.validate_peer(pem, consumer) }
+          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
           end
@@ -116,7 +126,8 @@ module Chairman
         client.log "New connection: opening connection to the server"
         EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
-          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path, :broker => client.broker do
+          provider.validate_peer { |pem| client.validate_peer(pem, consumer) }
+          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
           end

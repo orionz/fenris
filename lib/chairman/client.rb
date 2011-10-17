@@ -68,6 +68,15 @@ module Chairman
       req
     end
 
+    def validate_peer(pem, peer = nil)
+      result = OpenSSL::X509::Certificate.new(pem).verify broker.public_key
+      unless result
+        log "Certificate verification failed.  connection closed"
+        peer.close_connection if peer
+      end
+      result
+    end
+
     def cleanup
       providers.each do |provider|
         log "Deleting socket '#{provider["binding"]}'."
