@@ -68,10 +68,35 @@ module Chairman
       req
     end
 
-    def validate_peer(pem, peer = nil)
-      result = OpenSSL::X509::Certificate.new(pem).verify broker.public_key
+    def get_cn(cert)
+      cert.subject.to_a.detect { |a,b,c| a == "CN" }[1] rescue nil
+    end
+
+    def validate_provider(pem, peer = nil)
+      consumer_cert = OpenSSL::X509::Certificate.new(pem)
+      cert_cn = get_cn(consumer_cert)
+      cn_ok = !!providers.detect { |c| c["name"] == cert_cn }
+      cert_ok = !!consumer_cert.verify(broker.public_key)
+      log "Provider Cert CN '#{cert_cn}' in allowed_list? #{cn_ok}"
+      log "Provider Cert Signed By Broker? '#{cert_ok}'"
+      result = cn_ok and cert_ok
       unless result
-        log "Certificate verification failed.  connection closed"
+        log "Certificate verification failed.  connection closed [#{cn_ok}] [#{cert_ok}]"
+        peer.close_connection if peer
+      end
+      result
+    end
+
+    def validate_consumer(pem, peer = nil)
+      consumer_cert = OpenSSL::X509::Certificate.new(pem)
+      cert_cn = get_cn(consumer_cert)
+      cn_ok = !!consumers.detect { |c| c["name"] == cert_cn }
+      cert_ok = !!consumer_cert.verify(broker.public_key)
+      log "Consumer Cert CN '#{cert_cn}' in allowed_list? #{cn_ok}"
+      log "Consumer Cert Signed By Broker? '#{cert_ok}'"
+      result = cn_ok and cert_ok
+      unless result
+        log "Certificate verification failed.  connection closed [#{cn_ok}] [#{cert_ok}]"
         peer.close_connection if peer
       end
       result
