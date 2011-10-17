@@ -53,27 +53,15 @@ module Chairman
     extend self
 
     def producer_server(client, from, to)
-      EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
+      EventMachine::__send__ *mkbinding(:start_server, from), Chairman::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
         consumer.validate_peer { |pem| client.validate_consumer pem  }
         consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
-          EventMachine::connect *mkbinding(to), Chairman::Connection do |producer|
+          EventMachine::__send__ *mkbinding(:connect, to), Chairman::Connection do |producer|
             client.log "start proxying"
             producer.proxy consumer; consumer.proxy producer
           end
-        end
-      end
-    end
-
-    def producer_server_stdio(client, from)
-      producer = EventMachine::attach $stdin, Chairman::Connection
-      EventMachine::start_server *mkbinding(from), Chairman::Connection do |consumer|
-        client.log "New connection - begin ssl handshake"
-        consumer.validate_peer { |pem| client.validate_consumer pem, producer }
-        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
-          client.log "SSL complete -- start proxying"
-          producer.proxy consumer; consumer.proxy producer
         end
       end
     end
@@ -86,43 +74,27 @@ module Chairman
         client.update "0.0.0.0", listen_port
         from = "0.0.0.0:#{listen_port}"
         client.log "Serving port #{to} on #{from}"
-        if (to == "--")
-          producer_server_stdio(client, from)
-        else
-          producer_server(client, from, to)
-        end
+        producer_server(client, from, to)
       end
     end
 
-    def mkbinding(binding)
+    def mkbinding(action, binding)
       if binding =~ /^:?(\d+)$/
-        [ "0.0.0.0", $1.to_i ]
+        [ action, "0.0.0.0", $1.to_i ]
       elsif binding =~ /^(.+):(\d+)/
-        [ $1, $2.to_i ]
+        [ action, $1, $2.to_i ]
+      elsif binding == "--"
+        [ :attach, $stdin ]
       else
-        [ binding ]
+        [ action, binding ]
       end
     end
 
     ## really want to unify all these :(
     def consumer_connect(client, consumer, provider)
-      EventMachine::start_server *mkbinding(consumer), Chairman::Connection do |consumer|
+      EventMachine::__send__ *mkbinding(:start_server, consumer), Chairman::Connection do |consumer|
         client.log "New connection: opening connection to the server"
-        EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
-          client.log "Connection to the server made, starting ssl"
-          provider.validate_peer { |pem| client.validate_provider pem, consumer }
-          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
-            client.log "SSL complete - start proxying"
-            provider.proxy consumer; consumer.proxy provider
-          end
-        end
-      end
-    end
-
-    def consumer_connect_stdio(client, consumer, provider)
-      EventMachine::attach $stdin, Chairman::Connection do |consumer|
-        client.log "New connection: opening connection to the server"
-        EventMachine::connect *mkbinding(provider), Chairman::Connection do |provider|
+        EventMachine::__send__ *mkbinding(:connect, provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
           provider.validate_peer { |pem| client.validate_provider pem, consumer }
           provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
@@ -148,11 +120,7 @@ module Chairman
       EventMachine::run do
         providers.each do |p|
           binding = override_binding || p["binding"]
-          if binding == "--"
-            consumer_connect_stdio(client, binding, "#{p["ip"]}:#{p["port"]}")
-          else
-            consumer_connect(client, binding, "#{p["ip"]}:#{p["port"]}")
-          end
+          consumer_connect(client, binding, "#{p["ip"]}:#{p["port"]}")
         end
       end
     end
