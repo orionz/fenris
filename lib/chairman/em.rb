@@ -29,7 +29,6 @@ module Chairman
 
     def unbind
       @unbound = true
-      puts "DEBUG: unbind #{@signature}"
       EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
       close_connection
@@ -87,7 +86,6 @@ module Chairman
         client.update "0.0.0.0", listen_port
         from = "0.0.0.0:#{listen_port}"
         client.log "Serving port #{to} on #{from}"
-        puts "DEBUG: #{mkbinding(from)}"
         if (to == "--")
           producer_server_stdio(client, from)
         else
