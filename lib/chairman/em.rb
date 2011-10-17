@@ -29,6 +29,7 @@ module Chairman
 
     def unbind
       @unbound = true
+      puts "DEBUG: unbind #{@signature}"
       EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
       close_connection
@@ -53,13 +54,29 @@ module Chairman
     extend self
 
     def producer_server(client, from, to)
+      return producer_server_stdio(client, from, to) if to == "--"
       EventMachine::__send__ *mkbinding(:start_server, from), Chairman::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
-        consumer.validate_peer { |pem| client.validate_consumer pem  }
+        consumer.validate_peer { |pem| client.validate_peer pem  }
         consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
           EventMachine::__send__ *mkbinding(:connect, to), Chairman::Connection do |producer|
             client.log "start proxying"
+            producer.proxy consumer; consumer.proxy producer
+          end
+        end
+      end
+    end
+
+    def producer_server_stdio(client, from, to)
+      client.log "--- in stdio"
+      EventMachine::__send__ *mkbinding(:connect, to), Chairman::Connection do |producer|
+        client.log "--- #{producer.signature}"
+        EventMachine::__send__ *mkbinding(:start_server, from), Chairman::Connection do |consumer|
+          client.log "stdio connection - begin ssl handshake"
+          consumer.validate_peer { |pem| client.validate_peer pem  }
+          consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
+            client.log "SSL complete - start proxying"
             producer.proxy consumer; consumer.proxy producer
           end
         end
@@ -91,12 +108,12 @@ module Chairman
     end
 
     ## really want to unify all these :(
-    def consumer_connect(client, consumer, provider)
+    def consumer_connect(client, consumer, provider_name, provider)
       EventMachine::__send__ *mkbinding(:start_server, consumer), Chairman::Connection do |consumer|
         client.log "New connection: opening connection to the server"
         EventMachine::__send__ *mkbinding(:connect, provider), Chairman::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
-          provider.validate_peer { |pem| client.validate_provider pem, consumer }
+          provider.validate_peer { |pem| client.validate_peer pem, consumer, provider_name }
           provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
@@ -120,7 +137,7 @@ module Chairman
       EventMachine::run do
         providers.each do |p|
           binding = override_binding || p["binding"]
-          consumer_connect(client, binding, "#{p["ip"]}:#{p["port"]}")
+          consumer_connect(client, binding, p["name"], "#{p["ip"]}:#{p["port"]}")
         end
       end
     end

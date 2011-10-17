@@ -72,32 +72,19 @@ module Chairman
       cert.subject.to_a.detect { |a,b,c| a == "CN" }[1] rescue nil
     end
 
-    def validate_provider(pem, peer = nil)
+    def validate_peer(pem, peer_connection = nil, peer_name = nil)
       consumer_cert = OpenSSL::X509::Certificate.new(pem)
       cert_cn = get_cn(consumer_cert)
-      cn_ok = !!providers.detect { |c| c["name"] == cert_cn }
-      cert_ok = !!consumer_cert.verify(broker.public_key)
-      log "Provider Cert CN '#{cert_cn}' in allowed_list? #{cn_ok}"
-      log "Provider Cert Signed By Broker? '#{cert_ok}'"
-      result = cn_ok and cert_ok
-      unless result
-        log "Certificate verification failed.  connection closed [#{cn_ok}] [#{cert_ok}]"
-        peer.close_connection if peer
-      end
-      result
-    end
-
-    def validate_consumer(pem, peer = nil)
-      consumer_cert = OpenSSL::X509::Certificate.new(pem)
-      cert_cn = get_cn(consumer_cert)
-      cn_ok = !!consumers.detect { |c| c["name"] == cert_cn }
+      valid_peer_names = [ peer_name ] if peer_name
+      valid_peer_names ||= consumers.map { |c| c["name"] }
+      cn_ok = !!valid_peer_names.detect { |name| name == cert_cn }
       cert_ok = !!consumer_cert.verify(broker.public_key)
       log "Consumer Cert CN '#{cert_cn}' in allowed_list? #{cn_ok}"
       log "Consumer Cert Signed By Broker? '#{cert_ok}'"
       result = cn_ok and cert_ok
       unless result
         log "Certificate verification failed.  connection closed [#{cn_ok}] [#{cert_ok}]"
-        peer.close_connection if peer
+        peer_connection.close_connection if peer_connection
       end
       result
     end
