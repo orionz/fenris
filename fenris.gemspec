@@ -7,7 +7,7 @@ Gem::Specification.new do |gem|
 
   gem.author   = "Orion Henry"
   gem.email    = "orion.henry@gmail.com"
-  gem.homepage = "http://github.com/orion/fenris"
+  gem.homepage = "http://github.com/orionz/fenris"
   gem.summary  = "An authentication and service location service."
 
   gem.description = gem.summary
