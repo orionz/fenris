@@ -1,9 +1,9 @@
 
-Chairman - Opening magic doors from one place to another
+Fenris - a big scarry wolf
 
-$ export CHAIRMAN_URL='http://user@0.0.0.0:4567/'
-$ chairman serve 5432
-$ chairman connect DIR
+$ export FENRIS_URL='http://user@0.0.0.0:4567/'
+$ fenris serve 5432
+$ fenris connect DIR
 
 Client:
   if its an integer - bind to a port

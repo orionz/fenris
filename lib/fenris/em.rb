@@ -1,6 +1,6 @@
 require 'eventmachine'
 
-module Chairman
+module Fenris
   module Connection
     def initialize
       @peer = []
@@ -55,12 +55,12 @@ module Chairman
 
     def producer_server(client, from, to)
       return producer_server_stdio(client, from, to) if to == "--"
-      EventMachine::__send__ *mkbinding(:start_server, from), Chairman::Connection do |consumer|
+      EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
         consumer.validate_peer { |pem| client.validate_peer pem  }
         consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
-          EventMachine::__send__ *mkbinding(:connect, to), Chairman::Connection do |producer|
+          EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |producer|
             client.log "start proxying"
             producer.proxy consumer; consumer.proxy producer
           end
@@ -69,10 +69,8 @@ module Chairman
     end
 
     def producer_server_stdio(client, from, to)
-      client.log "--- in stdio"
-      EventMachine::__send__ *mkbinding(:connect, to), Chairman::Connection do |producer|
-        client.log "--- #{producer.signature}"
-        EventMachine::__send__ *mkbinding(:start_server, from), Chairman::Connection do |consumer|
+      EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |producer|
+        EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
           client.log "stdio connection - begin ssl handshake"
           consumer.validate_peer { |pem| client.validate_peer pem  }
           consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
@@ -109,9 +107,9 @@ module Chairman
 
     ## really want to unify all these :(
     def consumer_connect(client, consumer, provider_name, provider)
-      EventMachine::__send__ *mkbinding(:start_server, consumer), Chairman::Connection do |consumer|
+      EventMachine::__send__ *mkbinding(:start_server, consumer), Fenris::Connection do |consumer|
         client.log "New connection: opening connection to the server"
-        EventMachine::__send__ *mkbinding(:connect, provider), Chairman::Connection do |provider|
+        EventMachine::__send__ *mkbinding(:connect, provider), Fenris::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
           provider.validate_peer { |pem| client.validate_peer pem, consumer, provider_name }
           provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do

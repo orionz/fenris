@@ -1,15 +1,15 @@
-module Chairman
+module Fenris
   module Command
     def self.run(command, arg=nil, name=nil)
       begin
-        client = Chairman::Client.new(ENV['CHAIRMAN_URL']);
-        help = [ "Usage: chairman help\n",
-                 "       chairman info\n",
-                 "       chairman bind PROVIDER BINDING\n",
-                 "       chairman add CONSUMER\n",
-                 "       chairman remove CONSUMER\n",
-                 "       chairman serve BINDING\n",
-                 "       chairman connect [ USER [ BINDING ] ]" ]
+        client = Fenris::Client.new(ENV['FENRIS_URL']);
+        help = [ "Usage: fenris help\n",
+                 "       fenris info\n",
+                 "       fenris bind PROVIDER BINDING\n",
+                 "       fenris add CONSUMER\n",
+                 "       fenris remove CONSUMER\n",
+                 "       fenris serve BINDING\n",
+                 "       fenris connect [ USER [ BINDING ] ]" ]
         case command
           when "cert"
             puts client.cert.to_text
@@ -33,9 +33,9 @@ module Chairman
           when "serve"
             from = 10001
             to = arg
-            Chairman::Base.serve(client, from, to)
+            Fenris::Base.serve(client, from, to)
           when "connect"
-            Chairman::Base.connect(client, arg, name)
+            Fenris::Base.connect(client, arg, name)
           else
             puts command.inspect
             puts help

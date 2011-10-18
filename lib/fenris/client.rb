@@ -2,7 +2,7 @@ require 'restclient'
 require 'json'
 require 'openssl'
 
-module Chairman
+module Fenris
   class Client
     def debug(message)
       puts "DEBUG: #{message}" if ENV['DEBUG']
@@ -57,7 +57,7 @@ module Chairman
     end
 
     def generate_csr
-      subject = OpenSSL::X509::Name.parse "/DC=org/DC=chairman/CN=#{user_name}"
+      subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}"
       digest = OpenSSL::Digest::SHA1.new
       req = OpenSSL::X509::Request.new
       req.version = 0
