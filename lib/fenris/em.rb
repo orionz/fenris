@@ -53,35 +53,35 @@ module Fenris
   module Base
     extend self
 
-    def producer_server(client, from, to)
-      return producer_server_stdio(client, from, to) if to == "--"
+    def listen(client, from, to)
+      return listen_stdio(client, from, to) if to == "--"
       EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
         consumer.validate_peer { |pem| client.validate_peer pem  }
         consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
-          EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |producer|
+          EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |provider|
             client.log "start proxying"
-            producer.proxy consumer; consumer.proxy producer
+            provider.proxy consumer; consumer.proxy provider
           end
         end
       end
     end
 
-    def producer_server_stdio(client, from, to)
-      EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |producer|
+    def listen_stdio(client, from, to)
+      EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |provider|
         EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
           client.log "stdio connection - begin ssl handshake"
           consumer.validate_peer { |pem| client.validate_peer pem  }
           consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
             client.log "SSL complete - start proxying"
-            producer.proxy consumer; consumer.proxy producer
+            provider.proxy consumer; consumer.proxy provider
           end
         end
       end
     end
 
-    def serve(client, listen_port, to)
+    def provide(client, listen_port, to)
       at_exit { client.cleanup }
 
       EventMachine::run do
@@ -89,7 +89,7 @@ module Fenris
         client.update "0.0.0.0", listen_port
         from = "0.0.0.0:#{listen_port}"
         client.log "Serving port #{to} on #{from}"
-        producer_server(client, from, to)
+        listen(client, from, to)
       end
     end
 
@@ -120,7 +120,7 @@ module Fenris
       end
     end
 
-    def connect(client, overide_provider = nil, override_binding = nil)
+    def consume(client, overide_provider = nil, override_binding = nil)
       at_exit { client.cleanup }
 
       client.save_keys

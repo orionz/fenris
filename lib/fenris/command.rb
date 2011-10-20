@@ -8,8 +8,8 @@ module Fenris
                  "       fenris bind PROVIDER BINDING\n",
                  "       fenris add CONSUMER\n",
                  "       fenris remove CONSUMER\n",
-                 "       fenris serve BINDING\n",
-                 "       fenris connect [ USER [ BINDING ] ]" ]
+                 "       fenris provide BINDING\n",
+                 "       fenris consume [ USER [ BINDING ] ]" ]
         case command
           when "cert"
             puts client.cert.to_text
@@ -30,12 +30,12 @@ module Fenris
               puts "SERVICES:"
               client.providers.each { |c| puts "    #{c["binding"] || "unbound"} #{c["name"]} (#{c["provider"]}) #{c["ip"]} #{c["port"]}" }
             end
-          when "serve"
+          when "provide"
             from = 10001
             to = arg
-            Fenris::Base.serve(client, from, to)
-          when "connect"
-            Fenris::Base.connect(client, arg, name)
+            Fenris::Base.provide(client, from, to)
+          when "consume"
+            Fenris::Base.consume(client, arg, name)
           else
             puts command.inspect
             puts help
