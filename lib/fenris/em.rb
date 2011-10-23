@@ -52,7 +52,7 @@ module Fenris
   module Base
     extend self
 
-    UPDATE_INTERNVAL = 10
+    UPDATE_INTERVAL = 10
 
     def listen(client, external, internal)
       return listen_stdio(client, external, internal) if internal == "--"
@@ -142,7 +142,17 @@ module Fenris
         end
       end
     end
+
+    def exec(client, *args)
+      command = args.shift
+      EventMachine::run do
+        consume(client)
+        EventMachine::system command, *args do |out,status|
+          puts out
+          EventMachine::stop
+        end
+      end
+    end
   end
 end
-
 

@@ -1,6 +1,7 @@
 module Fenris
   module Command
-    def self.run(command, arg=nil, name=nil)
+    def self.run(command, *args)
+      arg, name = args
       begin
         url = ENV['FENRIS_URL'] || "https://#{ENV['FENRIS_KEY']}@#{ENV['FENRIS_HOST'] || 'broker.fenris.cc'}/"
         client = Fenris::Client.new(url)
@@ -9,6 +10,7 @@ module Fenris
                  "       fenris bind PROVIDER BINDING\n",
                  "       fenris add CONSUMER\n",
                  "       fenris remove CONSUMER\n",
+                 "       fenris exec COMMAND\n",
                  "       fenris provide BINDING\n",
                  "       fenris consume [ USER [ BINDING ] ]" ]
         case command
@@ -37,6 +39,8 @@ module Fenris
             Fenris::Base.provide(client, external, internal)
           when "consume"
             Fenris::Base.consume(client, arg, name)
+          when "exec"
+            Fenris::Base.exec(client, *args)
           else
             puts command.inspect
             puts help
