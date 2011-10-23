@@ -107,6 +107,7 @@ module Fenris
 
     ## really want to unify all these :(
     def consumer_connect(client, consumer, provider_name, provider)
+      client.log "COMSUMER CONNECT #{consumer.inspect} #{provider_name.inspect} #{provider.inspect}"
       EventMachine::__send__ *mkbinding(:start_server, consumer), Fenris::Connection do |consumer|
         client.log "New connection: opening connection to the server"
         EventMachine::__send__ *mkbinding(:connect, provider), Fenris::Connection do |provider|
@@ -135,7 +136,7 @@ module Fenris
       EventMachine::run do
         providers.each do |p|
           binding = override_binding || p["binding"]
-          consumer_connect(client, binding, p["name"], "#{p["ip"]}:#{p["port"]}")
+          consumer_connect(client, binding, p["name"], p["location"])
         end
       end
     end

@@ -2,7 +2,8 @@ module Fenris
   module Command
     def self.run(command, arg=nil, name=nil)
       begin
-        client = Fenris::Client.new(ENV['FENRIS_URL']);
+        url = ENV['FENRIS_URL'] || "https://#{ENV['FENRIS_KEY']}@#{ENV['FENRIS_HOST'] || 'broker.fenris.cc'}/"
+        client = Fenris::Client.new(url)
         help = [ "Usage: fenris help\n",
                  "       fenris info\n",
                  "       fenris bind PROVIDER BINDING\n",
@@ -28,7 +29,7 @@ module Fenris
             end
             unless client.providers.empty?
               puts "SERVICES:"
-              client.providers.each { |c| puts "    #{c["binding"] || "unbound"} #{c["name"]} (#{c["provider"]}) #{c["ip"]} #{c["port"]}" }
+              client.providers.each { |c| puts "    #{c["binding"] || "unbound"} #{c["name"]} (#{c["description"]}) #{c["location"]}" }
             end
           when "provide"
             from = 10001

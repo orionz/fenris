@@ -4,6 +4,10 @@ require 'openssl'
 
 module Fenris
   class Client
+    def initialize(url)
+      @url = url
+    end
+
     def debug(message)
       puts "DEBUG: #{message}" if ENV['DEBUG']
     end
@@ -12,12 +16,8 @@ module Fenris
       puts "LOG: #{message}"
     end
 
-    def initialize(url)
-      @url = url
-    end
-
     def update(ip, port)
-      RestClient.put("#{@url}", { :ip => ip, :port => port }, :content_type => :json, :accept => :json)
+      RestClient.put("#{@url}", { :location => "#{ip}:#{port}" }, :content_type => :json, :accept => :json)
     end
   
     def user
@@ -25,11 +25,11 @@ module Fenris
     end
 
     def consumers
-      @consumers ||= JSON.parse RestClient.get("#{@url}consumers", :content_type => :json, :accept => :json);
+      user["consumers"]
     end
 
     def providers
-      @providers ||= JSON.parse RestClient.get("#{@url}providers", :content_type => :json, :accept => :json);
+      user["providers"]
     end
 
     def user_name
@@ -37,7 +37,7 @@ module Fenris
     end
 
     def route
-      "#{user["ip"]}:#{user["port"]}" if user["ip"]
+      user["location"]
     end
 
     def remove(name)
