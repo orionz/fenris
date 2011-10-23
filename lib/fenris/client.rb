@@ -1,11 +1,13 @@
 require 'restclient'
 require 'json'
 require 'openssl'
+require 'uri'
+require 'eventmachine'
 
 module Fenris
   class Client
     def initialize(url)
-      @url = url
+      @url = URI.parse(url)
     end
 
     def debug(message)
@@ -22,6 +24,29 @@ module Fenris
   
     def user
       @user ||= JSON.parse RestClient.get("#{@url}", :content_type => :json, :accept => :json)
+    end
+
+    def async_connection
+      @async_connection ||= EM::Protocols::HttpClient2.connect :host => @url.host, :port => @url.port, :ssl => (@url.scheme == "https")
+    end
+
+    def basic_auth_string
+      basic_auth_string = "Basic " + ["#{@url.user}:#{@url.password}"].pack('m').strip.gsub(/\n/,'')
+    end
+
+    def async_update(&blk)
+      request = async_connection.get(:uri => "/", :basic_auth => { :username => @url.user, :password => @url.password }, :authorization => basic_auth_string )
+      request.callback do |response|
+        if response.status == 200
+          log "Updating user info from"
+          @user = JSON.parse response.content
+        else
+          log "Error updating user info"
+          debug response.status
+          @async_connection = nil
+        end
+        blk.call(response) if blk
+      end
     end
 
     def consumers
