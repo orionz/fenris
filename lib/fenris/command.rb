@@ -32,9 +32,9 @@ module Fenris
               client.providers.each { |c| puts "    #{c["binding"] || "unbound"} #{c["name"]} (#{c["description"]}) #{c["location"]}" }
             end
           when "provide"
-            from = 10001
-            to = arg
-            Fenris::Base.provide(client, from, to)
+            external = "#{Socket.gethostname}:#{10001}"
+            internal = arg
+            Fenris::Base.provide(client, external, internal)
           when "consume"
             Fenris::Base.consume(client, arg, name)
           else

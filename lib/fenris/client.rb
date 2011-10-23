@@ -16,8 +16,8 @@ module Fenris
       puts "LOG: #{message}"
     end
 
-    def update(ip, port)
-      RestClient.put("#{@url}", { :location => "#{ip}:#{port}" }, :content_type => :json, :accept => :json)
+    def update(location)
+      RestClient.put("#{@url}", { :location => location }, :content_type => :json, :accept => :json)
     end
   
     def user

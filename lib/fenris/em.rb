@@ -29,7 +29,6 @@ module Fenris
 
     def unbind
       @unbound = true
-      puts "DEBUG: unbind #{@signature}"
       EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
       close_connection
@@ -53,14 +52,14 @@ module Fenris
   module Base
     extend self
 
-    def listen(client, from, to)
-      return listen_stdio(client, from, to) if to == "--"
-      EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
+    def listen(client, external, internal)
+      return listen_stdio(client, external, internal) if internal == "--"
+      EventMachine::__send__ *mkbinding(:start_server, external), Fenris::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
         consumer.validate_peer { |pem| client.validate_peer pem  }
         consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
           client.log "SSL complete - open local connection"
-          EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |provider|
+          EventMachine::__send__ *mkbinding(:connect, internal), Fenris::Connection do |provider|
             client.log "start proxying"
             provider.proxy consumer; consumer.proxy provider
           end
@@ -68,9 +67,9 @@ module Fenris
       end
     end
 
-    def listen_stdio(client, from, to)
-      EventMachine::__send__ *mkbinding(:connect, to), Fenris::Connection do |provider|
-        EventMachine::__send__ *mkbinding(:start_server, from), Fenris::Connection do |consumer|
+    def listen_stdio(client, external, internal)
+      EventMachine::__send__ *mkbinding(:connect, internal), Fenris::Connection do |provider|
+        EventMachine::__send__ *mkbinding(:start_server, external), Fenris::Connection do |consumer|
           client.log "stdio connection - begin ssl handshake"
           consumer.validate_peer { |pem| client.validate_peer pem  }
           consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
@@ -81,15 +80,14 @@ module Fenris
       end
     end
 
-    def provide(client, listen_port, to)
+    def provide(client, external, internal)
       at_exit { client.cleanup }
 
       EventMachine::run do
         client.save_keys
-        client.update "0.0.0.0", listen_port
-        from = "0.0.0.0:#{listen_port}"
-        client.log "Serving port #{to} on #{from}"
-        listen(client, from, to)
+        client.update external
+        client.log "Serving port #{internal} on #{external}"
+        listen client, external, internal
       end
     end
 
