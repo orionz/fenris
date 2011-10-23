@@ -27,15 +27,16 @@ module Fenris
     end
 
     def async_connection
+      @async_connection = nil if @async_connection && @async_connection.error?
       @async_connection ||= EM::Protocols::HttpClient2.connect :host => @url.host, :port => @url.port, :ssl => (@url.scheme == "https")
     end
 
-    def basic_auth_string
-      basic_auth_string = "Basic " + ["#{@url.user}:#{@url.password}"].pack('m').strip.gsub(/\n/,'')
+    def auth_string
+      "Basic " + ["#{@url.user}:#{@url.password}"].pack('m').strip.gsub(/\n/,'')
     end
 
     def async_update(&blk)
-      request = async_connection.get(:uri => "/", :basic_auth => { :username => @url.user, :password => @url.password }, :authorization => basic_auth_string )
+      request = async_connection.get(:uri => "/", :authorization => auth_string )
       request.callback do |response|
         if response.status == 200
           log "Updating user info from"
@@ -45,7 +46,7 @@ module Fenris
           debug response.status
           @async_connection = nil
         end
-        blk.call(response) if blk
+        blk.call if blk
       end
     end
 

@@ -52,6 +52,8 @@ module Fenris
   module Base
     extend self
 
+    UPDATE_INTERNVAL = 10
+
     def listen(client, external, internal)
       return listen_stdio(client, external, internal) if internal == "--"
       EventMachine::__send__ *mkbinding(:start_server, external), Fenris::Connection do |consumer|
@@ -85,7 +87,7 @@ module Fenris
 
       EventMachine::run do
         client.save_keys
-        EventMachine::PeriodicTimer.new(10) { client.async_update }
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update }
         client.update external
         client.log "Serving port #{internal} on #{external}"
         listen client, external, internal
@@ -133,7 +135,7 @@ module Fenris
       abort "Can only pass a binding for a single provider" if override_binding && providers.length != 1
 
       EventMachine::run do
-        EventMachine::PeriodicTimer.new(10) { client.async_update }
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update }
         providers.each do |p|
           binding = override_binding || p["binding"]
           consumer_connect(client, binding, p["name"], p["location"])
