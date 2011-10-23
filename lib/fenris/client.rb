@@ -26,9 +26,13 @@ module Fenris
       @user ||= JSON.parse RestClient.get("#{@url}", :content_type => :json, :accept => :json)
     end
 
+    def ssl?
+      @url.scheme == "https"
+    end
+
     def async_connection
       @async_connection = nil if @async_connection && @async_connection.error?
-      @async_connection ||= EM::Protocols::HttpClient2.connect :host => @url.host, :port => @url.port, :ssl => (@url.scheme == "https")
+      @async_connection ||= EM::Protocols::HttpClient2.connect :host => @url.host, :port => @url.port, :ssl => ssl?
     end
 
     def auth_string
@@ -40,6 +44,7 @@ module Fenris
       request.callback do |response|
         if response.status == 200
           log "Updating user info from"
+          @broker ||= OpenSSL::X509::Certificate.new(async_connection.get_peer_cert) if ssl?
           @user = JSON.parse response.content
         else
           log "Error updating user info"

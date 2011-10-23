@@ -52,7 +52,7 @@ module Fenris
   module Base
     extend self
 
-    UPDATE_INTERVAL = 10
+    UPDATE_INTERVAL = 2
 
     def listen(client, external, internal)
       return listen_stdio(client, external, internal) if internal == "--"
