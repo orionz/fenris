@@ -7,7 +7,8 @@ require 'eventmachine'
 module Fenris
   class Client
     def initialize(url)
-      @url = URI.parse(url)
+      @url = url
+      @url = URI.parse(url) unless url.is_a? URI
     end
 
     def debug(message)

@@ -3,8 +3,10 @@ module Fenris
     def self.run(command, *args)
       arg, name = args
       begin
-        url = ENV['FENRIS_URL'] || "https://#{ENV['FENRIS_KEY']}@#{ENV['FENRIS_HOST'] || 'broker.fenris.cc'}/"
-        client = Fenris::Client.new(url)
+        url = URI.parse(ENV['FENRIS_URL'] || 'https://broker.fenris.cc')
+        url.user ||= ENV['FENRIS_USER']
+        url.password ||= ENV['FENRIS_AUTHKEY']
+        client = Fenris::Client.new url
         help = [ "Usage: fenris help\n",
                  "       fenris info\n",
                  "       fenris bind PROVIDER BINDING\n",
@@ -27,7 +29,9 @@ module Fenris
           when "useradd"
             client.useradd(arg)
           when "rekey"
-            puts client.rekey
+            newkey = client.rekey
+            puts "New Key Assigned:"
+            puts "export FENRIS_AUTHKEY='#{newkey}'"
           when "cert"
             puts client.cert.to_text
           when "bind"
@@ -62,6 +66,8 @@ module Fenris
         exit
       end
     rescue SystemExit
+    rescue RestClient::Unauthorized
+      puts "Unauthorized"
     rescue RestClient::ResourceNotFound
       puts "Resource Not Found"
       exit
