@@ -11,6 +11,7 @@ module Fenris
                  "       fenris useradd NAME\n",
                  "       fenris userdel NAME\n",
                  "       fenris users\n",
+                 "       fenris rekey\n",
                  "       fenris add CONSUMER\n",
                  "       fenris remove CONSUMER\n",
                  "       fenris exec COMMAND\n",
@@ -25,6 +26,8 @@ module Fenris
             client.userdel(arg)
           when "useradd"
             client.useradd(arg)
+          when "rekey"
+            puts client.rekey
           when "cert"
             puts client.cert.to_text
           when "bind"

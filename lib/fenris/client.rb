@@ -83,6 +83,10 @@ module Fenris
       JSON.parse RestClient.post("#{@url}users", { :name => name }, :content_type => :json, :accept => :json);
     end
 
+    def rekey
+      RestClient.post("#{@url}authkeys", { }, :content_type => :json, :accept => :json);
+    end
+
     def users
       JSON.parse RestClient.get("#{@url}users", :content_type => :json, :accept => :json)
     end
