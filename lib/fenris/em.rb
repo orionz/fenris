@@ -23,11 +23,16 @@ module Fenris
       @validator = blk;
     end
 
+    def on_unbind(&blk)
+      @on_unbind = blk
+    end
+
     def ssl_verify_peer(pem)
       @verify ||= @validator.call(pem)
     end
 
     def unbind
+      @on_unbind.call(self) if @on_unbind
       @unbound = true
       EM::stop if @signature < 3 ## this is for attach($stdin)
       @peer.close_connection_after_writing rescue nil
@@ -144,12 +149,15 @@ module Fenris
     end
 
     def exec(client, *args)
-      command = args.shift
+      command = args.join(' ')
       EventMachine::run do
         consume(client)
-        EventMachine::system command, *args do |out,status|
-          puts out
-          EventMachine::stop
+        stdin = EventMachine.attach $stdin, Connection
+        EventMachine::popen command, Connection do |ps|
+          puts "execing command '#{command}'"
+          ps.on_unbind { EventMachine::stop }
+          stdin.on_unbind { EventMachine::stop }
+          ps.proxy stdin; stdin.proxy ps
         end
       end
     end
