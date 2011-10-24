@@ -27,7 +27,10 @@ module Fenris
           when "userdel"
             client.userdel(arg)
           when "useradd"
-            client.useradd(arg)
+            new_user = client.useradd(arg)
+            puts "New user created"
+            puts "export FENRIS_USER='#{new_user["name"]}'"
+            puts "export FENRIS_AUTHKEY='#{new_user["authkey"]}'"
           when "rekey"
             newkey = client.rekey
             puts "New Key Assigned:"
@@ -66,6 +69,8 @@ module Fenris
         exit
       end
     rescue SystemExit
+    rescue RestClient::Conflict
+      puts "Duplicate"
     rescue RestClient::Unauthorized
       puts "Unauthorized"
     rescue RestClient::ResourceNotFound

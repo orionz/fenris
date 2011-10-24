@@ -44,7 +44,7 @@ module Fenris
       request = async_connection.get(:uri => "/", :authorization => auth_string )
       request.callback do |response|
         if response.status == 200
-          log "Updating user info from"
+          # TODO - output if something has changed
           @broker ||= OpenSSL::X509::Certificate.new(async_connection.get_peer_cert) if ssl?
           @user = JSON.parse response.content
         else
