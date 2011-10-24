@@ -79,6 +79,18 @@ module Fenris
       RestClient.post("#{@url}consumers", { :name => name }, :content_type => :json, :accept => :json);
     end
 
+    def useradd(name)
+      JSON.parse RestClient.post("#{@url}users", { :name => name }, :content_type => :json, :accept => :json);
+    end
+
+    def users
+      JSON.parse RestClient.get("#{@url}users", :content_type => :json, :accept => :json)
+    end
+
+    def userdel(name)
+      RestClient.delete("#{@url}users/#{name}", :content_type => :json, :accept => :json);
+    end
+
     def bind(name, binding)
       RestClient.put("#{@url}providers/#{name}", { :binding => binding }, :content_type => :json, :accept => :json);
     end

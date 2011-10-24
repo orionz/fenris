@@ -8,12 +8,23 @@ module Fenris
         help = [ "Usage: fenris help\n",
                  "       fenris info\n",
                  "       fenris bind PROVIDER BINDING\n",
+                 "       fenris useradd NAME\n",
+                 "       fenris userdel NAME\n",
+                 "       fenris users\n",
                  "       fenris add CONSUMER\n",
                  "       fenris remove CONSUMER\n",
                  "       fenris exec COMMAND\n",
                  "       fenris provide BINDING\n",
                  "       fenris consume [ USER [ BINDING ] ]" ]
         case command
+          when "users"
+            client.users.each do |u|
+              puts u["name"]
+            end
+          when "userdel"
+            client.userdel(arg)
+          when "useradd"
+            client.useradd(arg)
           when "cert"
             puts client.cert.to_text
           when "bind"
