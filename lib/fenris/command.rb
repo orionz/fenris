@@ -3,7 +3,7 @@ module Fenris
     def self.run(command, *args)
       arg, name = args
       begin
-        url = URI.parse(ENV['FENRIS_URL'] || 'https://broker.fenris.cc')
+        url = URI.parse(ENV['FENRIS_URL'] || 'https://broker.fenris.cc/')
         url.user ||= ENV['FENRIS_USER']
         url.password ||= ENV['FENRIS_AUTHKEY']
         client = Fenris::Client.new url
