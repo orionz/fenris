@@ -94,7 +94,7 @@ module Fenris
     end
 
     def users
-      JSON.parse RestClient.get("#{@url}users", :content_type => :json, :accept => :json)
+      user["subusers"]
     end
 
     def userdel(name)

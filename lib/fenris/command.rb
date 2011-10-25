@@ -26,6 +26,7 @@ module Fenris
             end
           when "userdel"
             client.userdel(arg)
+            puts "ok"
           when "useradd"
             new_user = client.useradd(arg)
             puts "New user created"
@@ -44,15 +45,19 @@ module Fenris
           when "remove"
             client.remove(arg)
           when "info"
-            puts "INFO:"
-            puts "     #{client.user["name"]} #{client.route}"
+            printf "INFO:\n"
+            printf "  %s\n", client.user["name"]
+            unless client.users.empty?
+              puts "SUBACCOUNTS:"
+              client.users.each { |c| printf "  %-20s\n", c["name"] }
+            end
             unless client.consumers.empty?
               puts "CLIENTS:"
-              client.consumers.each { |c| puts "    #{c["name"]} (#{c["binding"]})" }
+              client.consumers.each { |c| printf "  %-20s\n", c["name"] }
             end
             unless client.providers.empty?
               puts "SERVICES:"
-              client.providers.each { |c| puts "    #{c["binding"] || "unbound"} #{c["name"]} (#{c["description"]}) #{c["location"]}" }
+              client.providers.each { |c| printf "  %-20s  %s\n", c["name"], c["location"] }
             end
           when "provide"
             external = "#{Socket.gethostname}:#{10001}"
