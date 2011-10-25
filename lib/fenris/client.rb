@@ -9,14 +9,19 @@ module Fenris
     def initialize(url)
       @url = url
       @url = URI.parse(url) unless url.is_a? URI
+      @quiet = false
+    end
+
+    def quiet= val
+      @quiet = val
     end
 
     def debug(message)
-      puts "DEBUG: #{message}" if ENV['DEBUG']
+      puts "DEBUG: #{message}" if ENV['DEBUG'] and !@quiet
     end
 
     def log(message)
-      puts "LOG: #{message}"
+      puts "LOG: #{message}" if not @quiet
     end
 
     def update(location)

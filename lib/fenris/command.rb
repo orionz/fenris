@@ -61,6 +61,7 @@ module Fenris
           when "consume"
             Fenris::Base.consume(client, arg, name)
           when "exec"
+            client.quiet = true
             Fenris::Base.exec(client, *args)
           else
             puts command.inspect

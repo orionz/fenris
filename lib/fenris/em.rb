@@ -92,7 +92,7 @@ module Fenris
 
       EventMachine::run do
         client.save_keys
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update }
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update } unless ENV['FENRIS_NO_TIMER']
         client.update external
         client.log "Serving port #{internal} on #{external}"
         listen client, external, internal
@@ -140,7 +140,7 @@ module Fenris
       abort "Can only pass a binding for a single provider" if override_binding && providers.length != 1
 
       EventMachine::run do
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update }
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update } unless ENV['FENRIS_NO_TIMER']
         providers.each do |p|
           binding = override_binding || p["binding"]
           consumer_connect(client, binding, p["name"], p["location"])
@@ -152,12 +152,9 @@ module Fenris
       command = args.join(' ')
       EventMachine::run do
         consume(client)
-        stdin = EventMachine.attach $stdin, Connection
-        EventMachine::popen command, Connection do |ps|
-          puts "execing command '#{command}'"
-          ps.on_unbind { EventMachine::stop }
-          stdin.on_unbind { EventMachine::stop }
-          ps.proxy stdin; stdin.proxy ps
+        Thread.new do
+          system command
+          EM::stop
         end
       end
     end
