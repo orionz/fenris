@@ -120,7 +120,7 @@ module Fenris
         EventMachine::__send__ *mkbinding(:connect, provider), Fenris::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
           provider.validate_peer { |pem| client.validate_peer pem, consumer, provider_name }
-          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
+          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path(provider_name) do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
           end
