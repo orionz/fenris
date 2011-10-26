@@ -69,6 +69,7 @@ module Fenris
           EventMachine::__send__ *mkbinding(:connect, internal), Fenris::Connection do |provider|
             client.log "start proxying"
             provider.proxy consumer; consumer.proxy provider
+            provider.on_unbind { client.log "Connection closed" }
           end
         end
       end
