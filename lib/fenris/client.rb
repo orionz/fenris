@@ -110,7 +110,12 @@ module Fenris
     end
 
     def generate_csr(provider)
-      subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}:#{provider}"
+      if provider == :self
+        subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}"
+      else
+        subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}:#{provider}"
+      end
+      log "CSR: #{subject}"
       digest = OpenSSL::Digest::SHA1.new
       req = OpenSSL::X509::Request.new
       req.version = 0
@@ -151,7 +156,7 @@ module Fenris
         File.delete provider["binding"] if File.exists? provider["binding"]
       end
       ## TODO - gawd! ugly!
-      [ *providers.map { |c| c["name"] }.map { |provider| cert_path(provider) }, key_path ].each do |f|
+      [ *providers.map { |c| c["name"] }.map { |provider| cert_path(provider) }, cert_path, key_path ].each do |f|
         if File.exists? f
           log "Deleting file #{f}"
           File.delete f
@@ -163,6 +168,7 @@ module Fenris
       providers.map { |c| c["name"] }.each do |provider|
         File.open(cert_path(provider),"w") { |f| f.write cert(provider).to_pem } unless File.exists? cert_path(provider)
       end
+      File.open(cert_path,"w") { |f| f.write cert.to_pem } unless File.exists? cert_path
       File.open(key_path,"w") { |f| f.write key.to_pem } unless File.exists? key_path
     end
 
@@ -188,7 +194,7 @@ module Fenris
       @broker ||= OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert"))
     end
 
-    def cert(provider)
+    def cert(provider = :self)
       @cert ||= {}
       @cert[provider] ||= OpenSSL::X509::Certificate.new(File.read(cert_path(provider))) rescue nil
       @cert[provider] ||= gen_cert(provider)
@@ -199,8 +205,12 @@ module Fenris
       @key ||= gen_key
     end
 
-    def cert_path(provider)
-      ".#{user_name}-#{provider}.cert"
+    def cert_path(provider = :self)
+      if provider == :self
+        ".#{user_name}.cert"
+      else
+        ".#{user_name}:#{provider}.cert"
+      end
     end
 
     def key_path
