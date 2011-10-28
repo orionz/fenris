@@ -3,9 +3,9 @@
 lib = File.expand_path(File.dirname(__FILE__) + '/../lib')
 $LOAD_PATH.unshift(lib) if File.directory?(lib) && !$LOAD_PATH.include?(lib)
 
-require 'fenris/em'
 require 'fenris/command'
 require 'fenris/client'
+require 'fenris/connection'
 
 args = ARGV.dup
 ARGV.clear

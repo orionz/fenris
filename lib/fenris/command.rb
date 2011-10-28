@@ -68,12 +68,12 @@ module Fenris
           when "provide"
             external = "#{Socket.gethostname}:#{10001}"
             internal = arg
-            Fenris::Base.provide(client, external, internal)
+            client.provide(external, internal)
           when "consume"
-            Fenris::Base.consume(client, arg, name)
+            client.consume(arg, name)
           when "exec"
             client.quiet = true
-            Fenris::Base.exec(client, *args)
+            client.exec(*args)
           else
             puts command.inspect
             puts help

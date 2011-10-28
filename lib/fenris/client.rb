@@ -121,7 +121,7 @@ module Fenris
     def post_location(location)
       RestClient.put("#{@url}", { :location => location }, :content_type => :json, :accept => :json)
     end
-  
+
     def user
        @user ||= read_config_file "config.json"
     end
@@ -238,5 +238,47 @@ module Fenris
     def key
       read_config_file "#{user_name}.key"
     end
+
+    UPDATE_INTERVAL = 10
+
+    def provide(provider_binding, local_binding)
+      update_config
+      EventMachine::run do
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { Thread.new { update_config } } unless ENV['FENRIS_NO_TIMER']
+        post_location provider_binding
+        ProviderServer.begin(self, provider_binding, local_binding)
+      end
+    end
+
+    def consume(overide_provider = nil, override_binding = nil, &blk)
+      update_config
+
+      abort "No providers" if providers.empty?
+
+      p2 = providers.reject { |p| overide_provider && p["name"] != overide_provider }
+
+      abort "No provider named #{overide_provider}" if p2.empty?
+      abort "Can only pass a binding for a single provider" if override_binding && p2.length != 1
+
+      EventMachine::run do
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { update_config } unless ENV['FENRIS_NO_TIMER']
+        p2.each do |p|
+          binding = override_binding || p["binding"]
+          ConsumerLocal.begin(self, p["location"], p["name"], binding)
+        end
+        blk.call if blk
+      end
+    end
+
+    def exec(*args)
+      command = args.join(' ')
+      consume do
+        Thread.new do
+          system command
+          EventMachine::stop
+        end
+      end
+    end
   end
 end
+
