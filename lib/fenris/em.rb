@@ -64,7 +64,7 @@ module Fenris
       EventMachine::__send__ *mkbinding(:start_server, external), Fenris::Connection do |consumer|
         client.log "New connection - begin ssl handshake"
         consumer.validate_peer { |pem| client.validate_peer pem  }
-        consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
+        consumer.begin_ssl :key_file =>  client.my_key_path , :cert_file => client.my_cert_path do
           client.log "SSL complete - open local connection"
           EventMachine::__send__ *mkbinding(:connect, internal), Fenris::Connection do |provider|
             client.log "start proxying"
@@ -80,7 +80,7 @@ module Fenris
         EventMachine::__send__ *mkbinding(:start_server, external), Fenris::Connection do |consumer|
           client.log "stdio connection - begin ssl handshake"
           consumer.validate_peer { |pem| client.validate_peer pem  }
-          consumer.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path do
+          consumer.begin_ssl :key_file =>  client.my_key_path , :cert_file => client.my_cert_path do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
           end
@@ -89,12 +89,13 @@ module Fenris
     end
 
     def provide(client, external, internal)
-      at_exit { client.cleanup }
+#      at_exit { client.cleanup }
+
+      client.update_config
 
       EventMachine::run do
-        client.save_keys
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update } unless ENV['FENRIS_NO_TIMER']
-        client.update external
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { Thread.new { client.update_config } } unless ENV['FENRIS_NO_TIMER']
+        client.post_location external
         client.log "Serving port #{internal} on #{external}"
         listen client, external, internal
       end
@@ -120,7 +121,7 @@ module Fenris
         EventMachine::__send__ *mkbinding(:connect, provider), Fenris::Connection do |provider|
           client.log "Connection to the server made, starting ssl"
           provider.validate_peer { |pem| client.validate_peer pem, consumer, provider_name }
-          provider.begin_ssl :key_file =>  client.key_path , :cert_file => client.cert_path(provider_name) do
+          provider.begin_ssl :key_file =>  client.my_key_path , :cert_file => client.cert_path(provider_name) do
             client.log "SSL complete - start proxying"
             provider.proxy consumer; consumer.proxy provider
           end
@@ -129,9 +130,9 @@ module Fenris
     end
 
     def consume(client, overide_provider = nil, override_binding = nil)
-      at_exit { client.cleanup }
+#      at_exit { client.cleanup }
 
-      client.save_keys
+      client.update_config
 
       abort "No providers" if client.providers.empty?
 
@@ -141,7 +142,7 @@ module Fenris
       abort "Can only pass a binding for a single provider" if override_binding && providers.length != 1
 
       EventMachine::run do
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.async_update } unless ENV['FENRIS_NO_TIMER']
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { client.update_config } unless ENV['FENRIS_NO_TIMER']
         providers.each do |p|
           binding = override_binding || p["binding"]
           consumer_connect(client, binding, p["name"], p["location"])

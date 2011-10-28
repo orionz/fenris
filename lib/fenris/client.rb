@@ -12,6 +12,100 @@ module Fenris
       @quiet = false
     end
 
+    def config_dir
+      ENV["FENRIS_CONFIG"] || "#{ENV["HOME"]}/.fenris"
+    end
+
+    def verify_private_key
+      if key = read_config_file("#{user_name}.key")
+        log "using existing key    #{digest key}"
+      else
+        key = OpenSSL::PKey::RSA.new(2048)
+        write key
+        log "new rsa key generated #{digest key}"
+      end
+    end
+
+    def verify_cert(cn)
+      if cert = read_cert(cn)
+        log "existing cert         #{digest cert} :: #{cert.not_after} :: #{cn}"
+      else
+        cert = OpenSSL::X509::Certificate.new(RestClient.post("#{@url}cert", :csr => generate_csr(cn)))
+        write cert
+        log "new cert received     #{digest cert} :: #{cert.not_after} :: #{cn}"
+      end
+    end
+
+    def read_cert cn
+      if cert = read_config_file("#{cn}.crt")
+        if cert.not_after > Time.now
+          cert
+        else
+          log "cert expired          #{digest cert} :: #{cert.not_after} :: #{cn}"
+          nil
+        end
+      end
+    end
+
+    def my_cert
+      read_config_file "#{user_name}.crt"
+    end
+
+    def my_key
+      read_config_file "#{user_name}.key"
+    end
+
+    def cert(name)
+      read_config_file "#{user_name}:#{name}.crt"
+    end
+
+    def cert_path(name)
+      "#{config_dir}/#{user_name}:#{name}.crt"
+    end
+
+    def my_cert_path
+      "#{config_dir}/#{user_name}.crt"
+    end
+
+    def my_key_path
+      "#{config_dir}/#{user_name}.key"
+    end
+
+    def write_cert(cert)
+      write_config_file "#{get_cn(cert)}.crt", cert
+    end
+
+    def write_config_file name, data
+      File.umask 0077
+      Dir.mkdir config_dir unless Dir.exists? config_dir
+      File.open("#{config_dir}/#{name}","w") { |f| f.write(data) }
+    end
+
+    def read_config_file name
+      path = "#{config_dir}/#{name}"
+      if not File.exists? path
+        nil
+      elsif name =~ /[.]json$/
+        JSON.parse File.read(path)
+      elsif name =~ /[.]crt$/
+        OpenSSL::X509::Certificate.new File.read(path)
+      elsif name =~ /[.]key$/
+        OpenSSL::PKey::RSA.new File.read(path)
+      else
+        File.read name
+      end
+    end
+
+    def write object
+      if object.is_a? OpenSSL::X509::Certificate
+        write_config_file "#{get_cn(object)}.crt", object.to_pem
+      elsif object.is_a? OpenSSL::PKey::RSA
+        write_config_file "#{user_name}.key", object.to_pem
+      else
+        write_config_file "#{user_name}.json", object.to_json
+      end
+    end
+
     def quiet= val
       @quiet = val
     end
@@ -24,40 +118,32 @@ module Fenris
       puts "LOG: #{message}" if not @quiet
     end
 
-    def update(location)
+    def post_location(location)
       RestClient.put("#{@url}", { :location => location }, :content_type => :json, :accept => :json)
     end
   
     def user
-      @user ||= JSON.parse RestClient.get("#{@url}", :content_type => :json, :accept => :json)
+       @user ||= read_config_file "config.json"
     end
 
     def ssl?
       @url.scheme == "https"
     end
 
-    def async_connection
-      @async_connection = nil if @async_connection && @async_connection.error?
-      @async_connection ||= EM::Protocols::HttpClient2.connect :host => @url.host, :port => @url.port, :ssl => ssl?
+    def update_user_config
+      @user = JSON.parse RestClient.get("#{@url}", :content_type => :json, :accept => :json)
+      write user
     end
 
-    def auth_string
-      "Basic " + ["#{@url.user}:#{@url.password}"].pack('m').strip.gsub(/\n/,'')
-    end
-
-    def async_update(&blk)
-      request = async_connection.get(:uri => "/", :authorization => auth_string )
-      request.callback do |response|
-        if response.status == 200
-          # TODO - output if something has changed
-          @broker ||= OpenSSL::X509::Certificate.new(async_connection.get_peer_cert) if ssl?
-          @user = JSON.parse response.content
-        else
-          log "Error updating user info"
-          debug response.status
-          @async_connection = nil
-        end
-        blk.call if blk
+    def update_config
+      log "updating config in #{config_dir}"
+      update_user_config
+      log "have update user config"
+      write_config_file "root.crt", RestClient.get("#{@url}cert") ## TODO find a way to get this out of the connection info
+      verify_private_key
+      verify_cert user_name
+      providers.each do |p|
+        verify_cert "#{user_name}:#{p["name"]}"
       end
     end
 
@@ -109,13 +195,8 @@ module Fenris
       OpenSSL::Digest::SHA1.new(obj.to_der).to_s
     end
 
-    def generate_csr(provider)
-      if provider == :self
-        subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}"
-      else
-        subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{user_name}:#{provider}"
-      end
-      log "CSR: #{subject}"
+    def generate_csr(cn)
+      subject = OpenSSL::X509::Name.parse "/DC=org/DC=fenris/CN=#{cn}"
       digest = OpenSSL::Digest::SHA1.new
       req = OpenSSL::X509::Request.new
       req.version = 0
@@ -138,7 +219,7 @@ module Fenris
       consumer_cn,provider_cn = cert_cn.split ":"
       provider_cn_ok = !!user_name
       consumer_cn_ok = !!valid_peer_names.detect { |name| name == consumer_cn }
-      cert_ok = !!consumer_cert.verify(broker.public_key)
+      cert_ok = !!consumer_cert.verify(root.public_key)
       log "Consumer Cert CN '#{cert_cn}' displays correct provider? #{provider_cn_ok}"
       log "Consumer Cert CN '#{cert_cn}' in allowed_list? #{consumer_cn_ok}"
       log "Consumer Cert Signed By Broker? '#{cert_ok}'"
@@ -150,71 +231,12 @@ module Fenris
       result
     end
 
-    def cleanup
-      providers.each do |provider|
-        log "Deleting socket '#{provider["binding"]}'."
-        File.delete provider["binding"] if File.exists? provider["binding"]
-      end
-      ## TODO - gawd! ugly!
-      [ *providers.map { |c| c["name"] }.map { |provider| cert_path(provider) }, cert_path, key_path ].each do |f|
-        if File.exists? f
-          log "Deleting file #{f}"
-          File.delete f
-        end
-      end
-    end
-
-    def save_keys
-      providers.map { |c| c["name"] }.each do |provider|
-        File.open(cert_path(provider),"w") { |f| f.write cert(provider).to_pem } unless File.exists? cert_path(provider)
-      end
-      File.open(cert_path,"w") { |f| f.write cert.to_pem } unless File.exists? cert_path
-      File.open(key_path,"w") { |f| f.write key.to_pem } unless File.exists? key_path
-    end
-
-    def gen_cert(provider)
-      cert = OpenSSL::X509::Certificate.new(RestClient.post("#{@url}cert", :csr => generate_csr(provider)))
-      log "new cert received     #{digest cert}"
-      cert
-    end
-
-    def gen_key
-      key = OpenSSL::PKey::RSA.new(2048)
-      log "new rsa key generated #{digest key}"
-      key
-    end
-
-    def get_broker
-      cert = OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert"))
-      log "got cert from broker #{digest cert} #{cert.subject}"
-      cert
-    end
-
-    def broker
-      @broker ||= OpenSSL::X509::Certificate.new(RestClient.get("#{@url}cert"))
-    end
-
-    def cert(provider = :self)
-      @cert ||= {}
-      @cert[provider] ||= OpenSSL::X509::Certificate.new(File.read(cert_path(provider))) rescue nil
-      @cert[provider] ||= gen_cert(provider)
+    def root
+      read_config_file "root.crt"
     end
 
     def key
-      @key ||= OpenSSL::PKey::RSA.new(File.read(key_path)) rescue nil
-      @key ||= gen_key
-    end
-
-    def cert_path(provider = :self)
-      if provider == :self
-        ".#{user_name}.cert"
-      else
-        ".#{user_name}:#{provider}.cert"
-      end
-    end
-
-    def key_path
-      ".#{user_name}.key"
+      read_config_file "#{user_name}.key"
     end
   end
 end

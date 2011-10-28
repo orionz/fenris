@@ -12,7 +12,7 @@ module Fenris
                  "       fenris bind PROVIDER BINDING\n",
                  "       fenris useradd NAME\n",
                  "       fenris userdel NAME\n",
-                 "       fenris users\n",
+                 "       fenris update\n",
                  "       fenris rekey\n",
                  "       fenris add CONSUMER\n",
                  "       fenris remove CONSUMER\n",
@@ -20,31 +20,37 @@ module Fenris
                  "       fenris provide BINDING\n",
                  "       fenris consume [ USER [ BINDING ] ]" ]
         case command
-          when "users"
-            client.users.each do |u|
-              puts u["name"]
-            end
+          when "update"
+            client.update_config
           when "userdel"
+            client.update_user_config
             client.userdel(arg)
             puts "ok"
           when "useradd"
+            client.update_user_config
             new_user = client.useradd(arg)
             puts "New user created"
             puts "export FENRIS_USER='#{new_user["name"]}'"
             puts "export FENRIS_AUTHKEY='#{new_user["authkey"]}'"
           when "rekey"
+            client.update_user_config
             newkey = client.rekey
             puts "New Key Assigned:"
             puts "export FENRIS_AUTHKEY='#{newkey}'"
           when "cert"
+            client.update_user_config
             puts client.cert.to_text
           when "bind"
+            client.update_user_config
             client.bind(arg,name)
           when "add"
+            client.update_user_config
             client.add(arg)
           when "remove"
+            client.update_user_config
             client.remove(arg)
           when "info"
+            client.update_user_config
             printf "INFO:\n"
             printf "  %s\n", client.user["name"]
             unless client.users.empty?
