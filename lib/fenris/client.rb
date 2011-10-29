@@ -159,10 +159,6 @@ module Fenris
       user["name"]
     end
 
-    def route
-      user["location"]
-    end
-
     def remove(name)
       RestClient.delete("#{@url}consumers/#{name}");
     end
@@ -264,7 +260,7 @@ module Fenris
         EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { update_config } unless ENV['FENRIS_NO_TIMER']
         p2.each do |p|
           binding = override_binding || p["binding"]
-          ConsumerLocal.begin(self, p["location"], p["name"], binding)
+          ConsumerLocal.begin(self, p["locations"].first, p["name"], binding)
         end
         blk.call if blk
       end
