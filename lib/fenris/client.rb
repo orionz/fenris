@@ -12,6 +12,21 @@ module Fenris
       @quiet = false
     end
 
+    def url
+      @url.password ||= read_config_file("#{user_name}.authkey")
+      @url.password ||= ENV['FENRIS_AUTHKEY']
+      @url.password ||= get_authkey_from_stdin
+      @url
+    end
+
+    def get_authkey_from_stdin
+      system "stty -echo"
+      print "Authkey: "
+      password = gets.chomp
+      system "stty echo"
+      password
+    end
+
     def config_dir
       ENV["FENRIS_CONFIG"] || "#{ENV["HOME"]}/.fenris"
     end
@@ -30,7 +45,7 @@ module Fenris
       if cert = read_cert(cn)
         log "existing cert         #{digest cert} :: #{cert.not_after} :: #{cn}"
       else
-        cert = OpenSSL::X509::Certificate.new(RestClient.post("#{@url}cert", :csr => generate_csr(cn)))
+        cert = OpenSSL::X509::Certificate.new(RestClient.post("#{url}cert", :csr => generate_csr(cn)))
         write cert
         log "new cert received     #{digest cert} :: #{cert.not_after} :: #{cn}"
       end
@@ -92,7 +107,7 @@ module Fenris
       elsif name =~ /[.]key$/
         OpenSSL::PKey::RSA.new File.read(path)
       else
-        File.read name
+        File.read path
       end
     end
 
@@ -119,7 +134,7 @@ module Fenris
     end
 
     def post_location(location)
-      RestClient.put("#{@url}", { :location => location }, :content_type => :json, :accept => :json)
+      RestClient.put("#{url}", { :location => location }, :content_type => :json, :accept => :json)
     end
 
     def user
@@ -131,7 +146,8 @@ module Fenris
     end
 
     def update_user_config
-      @user = JSON.parse RestClient.get("#{@url}", :content_type => :json, :accept => :json)
+      @user = JSON.parse RestClient.get("#{url}", :content_type => :json, :accept => :json)
+      write_config_file "#{user_name}.authkey", @url.password
       write user
     end
 
@@ -139,7 +155,7 @@ module Fenris
       log "updating config in #{config_dir}"
       update_user_config
       log "have update user config"
-      write_config_file "root.crt", RestClient.get("#{@url}cert") ## TODO find a way to get this out of the connection info
+      write_config_file "root.crt", RestClient.get("#{url}cert") ## TODO find a way to get this out of the connection info
       verify_private_key
       verify_cert user_name
       providers.each do |p|
@@ -156,23 +172,27 @@ module Fenris
     end
 
     def user_name
-      user["name"]
+      @url.user
     end
 
     def remove(name)
-      RestClient.delete("#{@url}consumers/#{name}");
+      RestClient.delete("#{url}consumers/#{name}");
     end
 
     def add(name)
-      RestClient.post("#{@url}consumers", { :name => name }, :content_type => :json, :accept => :json);
+      RestClient.post("#{url}consumers", { :name => name }, :content_type => :json, :accept => :json);
     end
 
     def useradd(name)
-      JSON.parse RestClient.post("#{@url}users", { :name => name }, :content_type => :json, :accept => :json);
+      newuser = JSON.parse RestClient.post("#{url}users", { :name => name }, :content_type => :json, :accept => :json);
+      write_config_file "#{newuser["name"]}.authkey", newuser["authkey"]
+      newuser
     end
 
     def rekey
-      RestClient.post("#{@url}authkeys", { }, :content_type => :json, :accept => :json);
+      newkey = RestClient.post("#{url}authkeys", { }, :content_type => :json, :accept => :json);
+      write_config_file "#{user_name}.authkey", newkey
+      newkey
     end
 
     def users
@@ -180,11 +200,11 @@ module Fenris
     end
 
     def userdel(name)
-      RestClient.delete("#{@url}users/#{name}", :content_type => :json, :accept => :json);
+      RestClient.delete("#{url}users/#{name}", :content_type => :json, :accept => :json);
     end
 
     def bind(name, binding)
-      RestClient.put("#{@url}providers/#{name}", { :binding => binding }, :content_type => :json, :accept => :json);
+      RestClient.put("#{url}providers/#{name}", { :binding => binding }, :content_type => :json, :accept => :json);
     end
 
     def digest obj

@@ -29,14 +29,11 @@ module Fenris
           when "useradd"
             client.update_user_config
             new_user = client.useradd(arg)
-            puts "New user created"
-            puts "export FENRIS_USER='#{new_user["name"]}'"
-            puts "export FENRIS_AUTHKEY='#{new_user["authkey"]}'"
+            puts "New user created '#{new_user["name"]}'"
           when "rekey"
             client.update_user_config
             newkey = client.rekey
-            puts "New Key Assigned:"
-            puts "export FENRIS_AUTHKEY='#{newkey}'"
+            puts "Rekey Complete"
           when "cert"
             client.update_user_config
             puts client.cert.to_text

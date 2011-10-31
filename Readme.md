@@ -1,27 +1,80 @@
+Fenris - a VPN for cloud services
+=================================
 
-Fenris - a big scarry wolf
+This tool is designed for allow for secure service discovery, authentication,
+and communication between any TCP services.  Modern TCP services frequently
+have many different ways of implemented autnetication with different levels or
+quality.  This service is an attempt to unify these with a single simple
+autentication layer.
 
-Usage:
+Sample Workflow
+---------------
 
-fenris help -- this help
-fenris info -- info about your fenris account
-fenris rekey -- rekey the account - two keys active at once
-fenris add CONSUMER -- add a consumer to the allowed lists
-fenris remove CONSUMER -- remove a consumer from the allowed lists
-fenris provide BINDING -- provide a resource -- TCP socket or unix socket
-fenris consume [ PROVIDER [ BINDING ] ] -- consume all providers on default bindings (or one on a specified binding)
-fenris bind PROVIDER BINDING - set a default binding for a provider
-fenris exec COMMAND -- runs consume logic while executing a shell command
+In an example workflow you would first want to create two subaccounts.  One to
+be a service provider and one to be a service consumer.  Assume for this my
+master account is named 'demo'.  At any point you can type
 
-Admin Usage:
-fenris useradd NAME -- add a new user
-fenris userdel NAME -- delete a user
-fenris users -- get a list of all users
+    fenris info
 
-Bindings:
-  1234, :1234, 0.0.0.0:1234
-    are all the same - a tcp binding
-  foo, ./foo, /tmp/foo
-    all represent unix sockets
-  --
-    specifies stdin/stdout
+to see what user you are logged in as.  And what other users you are connected
+to.
+
+    fenris useradd consumer
+      New user created 'demo-customer'
+
+    fenris useradd provider
+      New user created 'demo-provider'
+
+Now by setting the environment variables as suggested I can act as either user.
+
+    export FENRIS_USER='demo-provider'
+
+Next assume I want to provide access to a memcache daemon running on port 11211
+to the consumer.
+
+    fenris add demo-consumer
+
+This gives 'demo-consumer' access to my service.  I can revoke his ability to
+use the service later with
+
+    fenris remove demo-consumer
+
+To provide access with a fenris daemon simple do
+
+    fenris provide 127.0.0.1:11211
+
+Technical Note: fenris will advertise the service on port 10001, and since
+rendezvous functionality has not been implemted yet, you must make sure that
+port is also available.  Also it will advertise the current hostname so that
+hostname must be resolvable by the client.
+
+Now switch users to the consumer.
+
+    export FENRIS_USER='demo-consumer'
+
+To securly mount the provided memcache on local port 9999 you can type
+
+    fenris consume demo-provider 127.0.0.1:9999
+
+Or if you bind it to a default port which is useful for consuming multiple
+providers at once.
+
+    fenris bind demo-provider 127.0.0.1:9999
+    fenris consume
+
+Setup
+-----
+
+    gem install fenris
+
+One important dependancy of fenris is eventmachine compiled with TLS support.
+Without this it will not be able to manage a proxy.  You will have a fenris
+username and authtoken.  Simple set the environment variable
+
+    export FENRIS_USER="myuser"
+
+And you will be prompted for the authtoken the first time you run the command.
+
+How it Works
+------------
+
