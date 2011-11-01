@@ -42,10 +42,12 @@ To provide access with a fenris daemon simple do
 
     fenris -u demo-provider provide 127.0.0.1:11211
 
-Technical Note: fenris will advertise the service on port 10001, and since
-rendezvous functionality has not been implemted yet, you must make sure that
-port is also available.  Also it will advertise the current hostname so that
-hostname must be resolvable by the client.
+Note that by default fenris will attempt to provide access to other fenris
+nodes by listening on your HOSTNAME:10001. If you need a different port or if
+hostname does not match a resolvable IP you can use --host and --port switches
+to specify another bind point.
+
+    fenris -u demo-provider --host 0.0.0.0 --port 8888 provide 127.0.0.1:11211
 
 Now as the consumer...
 

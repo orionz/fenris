@@ -134,12 +134,12 @@ module Fenris
           options.config = dir
         end
 
-        opts.on("-h", "--hostname HOST", "Hostname given to consumers on 'provide'. Default is `hostname`.") do |dir|
-          options.config = dir
+        opts.on("-h", "--hostname HOST", "Hostname given to consumers on 'provide'. Default is `hostname`.") do |host|
+          options.host = host
         end
 
-        opts.on("-p", "--port PORT", "") do |dir|
-          options.config = dir
+        opts.on("-p", "--port PORT", "") do |port|
+          options.port = port
         end
 
         opts.on("-q", "--quiet", "Do not print log messages.") do
