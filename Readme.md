@@ -25,42 +25,39 @@ to.
     fenris useradd provider
       New user created 'demo-provider'
 
-Now by setting the environment variables as suggested I can act as either user.
-
-    export FENRIS_USER='demo-provider'
+Specify a user with either the -u command line switch or the FENRIS_USER
+environment variable.
 
 Next assume I want to provide access to a memcache daemon running on port 11211
 to the consumer.
 
-    fenris add demo-consumer
+    fenris -u demo-provider add demo-consumer
 
 This gives 'demo-consumer' access to my service.  I can revoke his ability to
 use the service later with
 
-    fenris remove demo-consumer
+    fenris -u demo-provider remove demo-consumer
 
 To provide access with a fenris daemon simple do
 
-    fenris provide 127.0.0.1:11211
+    fenris -u demo-provider provide 127.0.0.1:11211
 
 Technical Note: fenris will advertise the service on port 10001, and since
 rendezvous functionality has not been implemted yet, you must make sure that
 port is also available.  Also it will advertise the current hostname so that
 hostname must be resolvable by the client.
 
-Now switch users to the consumer.
-
-    export FENRIS_USER='demo-consumer'
+Now as the consumer...
 
 To securly mount the provided memcache on local port 9999 you can type
 
-    fenris consume demo-provider 127.0.0.1:9999
+    fenris -u demo-consumer consume demo-provider 127.0.0.1:9999
 
 Or if you bind it to a default port which is useful for consuming multiple
 providers at once.
 
-    fenris bind demo-provider 127.0.0.1:9999
-    fenris consume
+    fenris -u demo-consumer bind demo-provider 127.0.0.1:9999
+    fenris -u demo-consumer consume
 
 Setup
 -----
