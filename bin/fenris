@@ -7,10 +7,10 @@ require 'fenris/command'
 require 'fenris/client'
 require 'fenris/connection'
 
-args = ARGV.dup
-ARGV.clear
-command = args.shift.strip rescue 'help'
+#args = ARGV.dup
+#ARGV.clear
+#command = args.shift.strip rescue 'help'
 #arg = args.shift.strip rescue nil
 
-Fenris::Command.run command, *args
+Fenris::Command.run ARGV
 

@@ -3,18 +3,29 @@ require 'json'
 require 'openssl'
 require 'uri'
 require 'eventmachine'
+require 'ostruct'
 
 module Fenris
+
+  class NoSuchProvider < RuntimeError; end
+
   class Client
-    def initialize(url)
+    def initialize(url, options = OpenStruct.new)
       @url = url
       @url = URI.parse(url) unless url.is_a? URI
-      @quiet = false
+      options = OpenStruct.new options if options.is_a? Hash
+      @options = options
+      @verbose = false
+    end
+
+    def options
+      @options
     end
 
     def url
-      @url.password ||= read_config_file("#{user_name}.authkey")
-      @url.password ||= ENV['FENRIS_AUTHKEY']
+      @url.user = options.user
+      @url.password = read_config_file("#{user_name}.authkey")
+      @url.password ||= options.password
       @url.password ||= get_authkey_from_stdin
       @url
     end
@@ -28,12 +39,12 @@ module Fenris
     end
 
     def config_dir
-      ENV["FENRIS_CONFIG"] || "#{ENV["HOME"]}/.fenris"
+      options.config
     end
 
     def verify_private_key
       if key = read_config_file("#{user_name}.key")
-        log "using existing key    #{digest key}"
+        log "using existing key    #{digest key}" if @verbose
       else
         key = OpenSSL::PKey::RSA.new(2048)
         write key
@@ -43,7 +54,7 @@ module Fenris
 
     def verify_cert(cn)
       if cert = read_cert(cn)
-        log "existing cert         #{digest cert} :: #{cert.not_after} :: #{cn}"
+        log "existing cert         #{digest cert} :: #{cert.not_after} :: #{cn}" if @verbose
       else
         cert = OpenSSL::X509::Certificate.new(RestClient.post("#{url}cert", :csr => generate_csr(cn)))
         write cert
@@ -121,19 +132,15 @@ module Fenris
       end
     end
 
-    def quiet= val
-      @quiet = val
-    end
-
     def debug(message)
-      puts "DEBUG: #{message}" if ENV['DEBUG'] and !@quiet
+      puts "DEBUG: #{message}" if options.debug and not options.quiet
     end
 
     def log(message)
-      puts "LOG: #{message}" if not @quiet
+      puts "LOG: #{message}" if not options.quiet
     end
 
-    def post_location(location)
+    def post_location
       RestClient.put("#{url}", { :location => location }, :content_type => :json, :accept => :json)
     end
 
@@ -151,16 +158,34 @@ module Fenris
       write user
     end
 
-    def update_config
-      log "updating config in #{config_dir}"
+    def update_config(verbose = true)
+      @verbose = verbose
+      log "updating config in #{config_dir}" if @verbose
       update_user_config
-      log "have update user config"
+      log "have update user config" if @verbose
       write_config_file "root.crt", RestClient.get("#{url}cert") ## TODO find a way to get this out of the connection info
       verify_private_key
       verify_cert user_name
       providers.each do |p|
         verify_cert "#{user_name}:#{p["name"]}"
       end
+      @verbose = false
+    end
+
+    def provider_map
+      Hash[ * providers.map { |p| [ p["name"], p["binding"] ] }.flatten ]
+    end
+
+    def location_of(provider)
+      if p = providers.detect { |p| p["name"] == provider }
+        p["locations"].first
+      else
+        raise NoSuchProvider, provider
+      end
+    end
+
+    def location
+      "#{options.host}:#{options.port}"
     end
 
     def consumers
@@ -172,24 +197,28 @@ module Fenris
     end
 
     def user_name
-      @url.user
+      options.user
     end
 
     def remove(name)
+      update_user_config
       RestClient.delete("#{url}consumers/#{name}");
     end
 
     def add(name)
+      update_user_config
       RestClient.post("#{url}consumers", { :name => name }, :content_type => :json, :accept => :json);
     end
 
     def useradd(name)
+      update_user_config
       newuser = JSON.parse RestClient.post("#{url}users", { :name => name }, :content_type => :json, :accept => :json);
       write_config_file "#{newuser["name"]}.authkey", newuser["authkey"]
       newuser
     end
 
     def rekey
+      update_user_config
       newkey = RestClient.post("#{url}authkeys", { }, :content_type => :json, :accept => :json);
       write_config_file "#{user_name}.authkey", newkey
       newkey
@@ -200,10 +229,12 @@ module Fenris
     end
 
     def userdel(name)
+      update_user_config
       RestClient.delete("#{url}users/#{name}", :content_type => :json, :accept => :json);
     end
 
     def bind(name, binding)
+      update_user_config
       RestClient.put("#{url}providers/#{name}", { :binding => binding }, :content_type => :json, :accept => :json);
     end
 
@@ -257,30 +288,26 @@ module Fenris
 
     UPDATE_INTERVAL = 10
 
-    def provide(provider_binding, local_binding)
+    def provide(local_binding)
       update_config
       EventMachine::run do
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { Thread.new { update_config } } unless ENV['FENRIS_NO_TIMER']
-        post_location provider_binding
-        ProviderServer.begin(self, provider_binding, local_binding)
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { Thread.new { update_config(false) } } if options.autosync
+        post_location
+        ProviderServer.begin(self, location, local_binding)
       end
     end
 
-    def consume(overide_provider = nil, override_binding = nil, &blk)
+    def consume(arg = nil, &blk)
       update_config
 
-      abort "No providers" if providers.empty?
-
-      p2 = providers.reject { |p| overide_provider && p["name"] != overide_provider }
-
-      abort "No provider named #{overide_provider}" if p2.empty?
-      abort "Can only pass a binding for a single provider" if override_binding && p2.length != 1
+      map = arg if arg.is_a? Hash
+      map = { arg => provider_map[arg] } if arg.is_a? String
+      map ||= provider_map
 
       EventMachine::run do
-        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { update_config } unless ENV['FENRIS_NO_TIMER']
-        p2.each do |p|
-          binding = override_binding || p["binding"]
-          ConsumerLocal.begin(self, p["locations"].first, p["name"], binding)
+        EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { update_config(false) } if options.autosync
+        map.each do |provider, binding|
+          ConsumerLocal.begin(self, location_of(provider), provider, binding)
         end
         blk.call if blk
       end
