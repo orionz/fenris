@@ -31,11 +31,13 @@ module Fenris
     end
 
     def get_authkey_from_stdin
-      system "stty -echo"
-      print "Authkey: "
-      password = gets.chomp
-      system "stty echo"
-      password
+      begin
+        system "stty -echo"
+        print "Authkey: "
+        $stdin.gets.chomp
+      ensure
+        system "stty echo"
+      end
     end
 
     def config_dir
