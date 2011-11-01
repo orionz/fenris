@@ -77,6 +77,6 @@ And you will be prompted for the authtoken the first time you run the command.
 How it Works
 ------------
 
-  ![How it works](raw/master/images/fenris.jpg)
+  ![How it works](fenris/raw/master/images/fenris.jpg)
 
 
