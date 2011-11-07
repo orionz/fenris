@@ -190,6 +190,10 @@ module Fenris
       "#{options.host}:#{options.port}"
     end
 
+    def bind_location
+      "0.0.0.0:#{options.port}"
+    end
+
     def consumers
       user["consumers"]
     end
@@ -295,7 +299,7 @@ module Fenris
       EventMachine::run do
         EventMachine::PeriodicTimer.new(UPDATE_INTERVAL) { Thread.new { update_config(false) } } if options.autosync
         post_location
-        ProviderServer.begin(self, location, local_binding)
+        ProviderServer.begin(self, bind_location, local_binding)
       end
     end
 
